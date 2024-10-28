@@ -1,0 +1,96 @@
+# check connectivity with a jukebox cluster
+
+GET http://host.docker.internal:12375/v1.45/images/json
+###
+
+GET http://host.docker.internal:12376/v1.45/images/json
+###
+
+# check jukeboxsvc api
+
+GET http://localhost/cluster/state
+###
+
+POST http://localhost/cluster/pull_image
+content-type: application/json
+
+{
+    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
+    "tag": "x11_gpu-intel_scummvm_2.8.1_latest"
+}
+###
+
+POST http://localhost/cluster/pull_image
+content-type: application/json
+
+{
+    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
+    "tag": "x11_cpu_dosbox-x_2024.03.01_latest"
+}
+###
+
+POST http://localhost/cluster/pull_image
+content-type: application/json
+
+{
+    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
+    "tag": "x11_cpu_wine_stable_latest"
+}
+###
+
+POST http://localhost/containers/run
+content-type: application/json
+
+{
+    "app_descr": {
+        "slug": "the-pink-panther-hokus-pokus-pink",
+        "release_uuid": "780a21c5-5635-4a6d-aece-c9267b4ac8ff"
+    },
+    "reqs": {
+        "app": {
+            "midi": false,
+            "screen_height": 480,
+            "screen_width": 640
+        },
+        "container": {
+            "image_rev": "latest",
+            "runner": {
+                "name": "scummvm",
+                "ver": "2.8.1",
+                "window_system": "x11"
+            },
+            "video_enc": "cpu"
+        },
+        "hw": {
+            "dgpu": false,
+            "igpu": true,
+            "memory": 1048576000,
+            "memory_shared": null,
+            "nanocpus": 1000000000
+        }
+    },
+    "user_id": 50000,
+    "preferred_dcs": ["us-west-1", "us-east-1"],
+    "ws_conn": {
+        "consumer_id": "e5277990-6cad-407f-bd78-646eb909a3c2",
+        "id": "ws-conn-id-dev"
+    }
+}
+###
+
+POST http://localhost/nodes/1c26ab02-dcdc-4bdb-ab51-d87cb26010c7/containers/4c660e5ea7640f6385632cbef87ba018961559644ad3d87781c863b72dbc41f0/pause
+###
+
+POST http://localhost/nodes/1c26ab02-dcdc-4bdb-ab51-d87cb26010c7/containers/1d474612f3b00e8a77fa1e3cff271f307867a47e85ea2a2a9f04775fcdc6c62b/resume
+content-type: application/json
+
+{
+    "ws_conn": {
+        "consumer_id": "93567cfe-62bc-479f-84c7-331c6dd20bdf",
+        "id": "ws-conn-id-dev"
+    }
+}
+###
+
+POST http://localhost/nodes/3KXM:A6UU:LLYL:UYPH:ZWH2:AJ37:G5UL:2UZC:653T:BFLZ:R5OD:DOSR/containers/fafd7a263229dca419e68dd4cd84ad4655a3ca96547aa58299afee07226ef8c4/stop
+###

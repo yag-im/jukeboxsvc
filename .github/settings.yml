@@ -1,0 +1,4 @@
+_extends: .github:settings.yml
+repository:
+  name: jukeboxsvc
+  description: CRUD operations service for jukebox containers
