@@ -23,4 +23,4 @@ venv.bak/
 dist
 
 secrets/
-secret.env
+secrets.env

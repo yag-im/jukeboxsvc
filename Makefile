@@ -59,7 +59,7 @@ docker-run: ## Run dev docker image
 		-p $(LISTEN_PORT):80/tcp \
 		--add-host host.docker.internal:host-gateway \
 		--env-file $(ROOT_DIR)/.devcontainer/.env \
-		--env-file $(ROOT_DIR)/.devcontainer/secret.env \
+		--env-file $(ROOT_DIR)/.devcontainer/secrets.env \
 		$(DOCKER_IMAGE_TAG)
 
 .PHONY: docker-build
@@ -87,3 +87,11 @@ ifdef TAG
 else
 	@echo 1>&2 "usage: make docker-pub TAG=1.0.0"
 endif
+
+.PHONY: gha-build
+gha-build: ## GitHub action: install all deps, lint, test and build app
+	poetry install --only dev
+	$(MAKE) lint
+	$(MAKE) test
+	poetry install
+	poetry build -f wheel

@@ -139,12 +139,13 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
     """
     appstor_nodes = json.loads(os.environ.get("APPSTOR_NODES", "[]"))
     if not appstor_nodes:
-        # pure local host setup (for tests only)
+        # pure local host setup (for local dev mode only)
         src_path: Path = (
-            Path(os.environ["LOCAL_APPS_DIR"]) / run_specs.app_descr.slug / run_specs.app_descr.release_uuid
+            Path(os.environ["DATA_DIR"]) / "apps" / run_specs.app_descr.slug / run_specs.app_descr.release_uuid
         )
         dst_path: Path = (
-            Path(os.environ["LOCAL_CLONES_DIR"])
+            Path(os.environ["DATA_DIR"])
+            / "clones"
             / str(run_specs.user_id)
             / run_specs.app_descr.slug
             / run_specs.app_descr.release_uuid

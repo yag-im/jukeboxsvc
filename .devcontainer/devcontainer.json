@@ -12,7 +12,7 @@
         "--env-file",
         "${localWorkspaceFolder}/.devcontainer/.env",
         "--env-file",
-        "${localWorkspaceFolder}/.devcontainer/secret.env"
+        "${localWorkspaceFolder}/.devcontainer/secrets.env"
     ],
     "customizations": {
         "vscode": {
@@ -28,7 +28,6 @@
     ],
     "mounts": [
         "source=${env:HOME}${env:USERPROFILE}/.ssh,target=/home/vscode/.ssh,type=bind",
-        "source=/ara/devel/acme/yag/appstor_data,target=/mnt/appstor,type=bind",
-        "source=/mnt/appstor_nfs,target=/mnt/appstor_nfs,type=bind"
+        "source=${env:HOME}${env:USERPROFILE}/yag/data/ports,target=/mnt/data,type=bind"
     ]
 }

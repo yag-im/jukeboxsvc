@@ -17,9 +17,6 @@ RUN pip install --upgrade pip \
     && opentelemetry-bootstrap -a install \
     && rm -rf /tmp/*.whl
 
-# secrets must be in sync with infra/ansible/roles/appstor/files/secrets
-COPY runtime/secrets/.ssh ${APP_HOME_DIR}/.ssh
-
 # bin folder contains:
 #     cmd.sh: runs gunicorn
 #     start.sh: handles graceful shutdown (wraps cmd.sh)

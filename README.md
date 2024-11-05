@@ -1,20 +1,39 @@
 # jukeboxsvc
 
-jukeboxsvc is a service governing jukebox cluster
+Service governing *jukebox* cluster.
 
-## refresh docker image on a cluster node [jukebox node]
+## Development
 
-    AWS_PROFILE=ecr-ro docker pull 070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox:x11_gpu-intel_scummvm_2.8.0_20240218
+### Prerequisite
 
-# release a new version
+Make sure ports data directory exists on the host machine:
 
-Inside a devcontainer:
+    ~/yag/data/ports
 
-    make lint
-    make build
+and contains `apps` and `clones` folders.
 
-Outside of a devcontainer:
+jukeboxsvc will perform a local copy from `apps` to `clones` on the app run event.
 
-    make docker-build
-    make docker-run
-    make docker-pub TAG=0.0.20
+Also make sure `appstor-vol` docker volume (sourced from ~/yag/data/ports/clones) was created on the host machine:
+
+    docker volume create --driver local \
+        --opt type=none \
+        --opt o=bind \
+        --opt device=~/yag/data/ports/clones \
+        appstor-vol
+
+This volume will be mounted inside the jukebox docker container on the app start.
+
+Create *.devcontainer/secrets.env* file:
+
+    SIGNALER_AUTH_TOKEN=***VALUE***
+
+Make sure:
+
+    IGPU_CARD_ID
+    IGPU_RENDER_DEVICE_ID
+
+in `.devcontainer/.env` contain proper values.
+TODO: automate card detection and selection on the jukebox node end
+
+Then simply open this project in any IDE that supports devcontainers (VSCode is recommended).
