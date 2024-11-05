@@ -37,11 +37,11 @@ bootstrap: ## Perform a bootstrap
 
 .PHONY: lint
 lint: ## Run linters
-	tox -e lint
+	poetry run tox -e lint
 
 .PHONY: test
 test: ## Run unit tests
-	tox -e test
+	poetry run tox -e test
 
 .PHONY: clean
 clean: ## Remove all generated artifacts (except .venv and .env)
