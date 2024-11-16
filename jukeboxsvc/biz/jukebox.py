@@ -193,8 +193,6 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         NodeNotFoundException: when node not found
         ContainerRunFailedException: when container run failed
     """
-    aws_ecr_host = os.getenv("AWS_ECR_HOST", None)
-    docker_image_tag_path = os.getenv("DOCKER_IMAGE_TAG_PATH", "im.acme.yag.jukebox")
     fps = int(os.environ["FPS"])
     signaler_auth_token = os.environ["SIGNALER_AUTH_TOKEN"]
     signaler_host = os.environ["SIGNALER_HOST"]
@@ -205,6 +203,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     jukebox_contaienr_streamd_max_inactivity_period = int(
         os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_PERIOD", "3600")
     )
+    jukebox_docker_repo_prefix = os.environ["JUKEBOX_DOCKER_REPO_PREFIX"]  # e.g. ghcr.io/yag-im/jukebox
 
     def _gen_container_name(run_specs: RunContainerRequestDTO) -> str:
         rnd = str(uuid.uuid4())[:8]
@@ -241,10 +240,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
 
     clone_app(run_specs, region=node.region)
 
-    container_image_tag = run_specs.reqs.container.image_tag()
-    docker_image_tag = (
-        f"{aws_ecr_host}/{docker_image_tag_path}:{container_image_tag}" if aws_ecr_host else container_image_tag
-    )
+    image_name_with_tag = run_specs.reqs.container.image_name_with_tag()
+    docker_image_tag = f"{jukebox_docker_repo_prefix}/{image_name_with_tag}"
     run_container_res = node.run_container(
         run_specs=ContainerRunSpecs(
             attrs=ContainerRunSpecs.Attrs(

@@ -74,7 +74,7 @@ class Node:
         network_mode: str = "host",  # cos webrtc requires a lot of UDP ports
         privileged: bool = False,
     ) -> dict[str, t.Any]:
-        client = get_cluster_client(self.api_uri, ecr_login=False, timeout=55)
+        client = get_cluster_client(self.api_uri, timeout=55)
         c = client.containers.run(
             auto_remove=auto_remove,
             cpuset_cpus=",".join(map(str, run_specs.attrs.cpuset_cpus)),
@@ -123,7 +123,7 @@ class Node:
         self._get_container(container_id).exec_run(cmd=cmd, user=user, detach=detach)
 
     def pull_image(self, repository: str, tag: str) -> Image:
-        client = get_cluster_client(self.api_uri, ecr_login=True)
+        client = get_cluster_client(self.api_uri)
         return client.images.pull(repository, tag)
 
     def _update(self) -> None:

@@ -1,6 +1,6 @@
 # jukeboxsvc
 
-Service governing *jukebox* cluster.
+Service governing *jukebox* clusters.
 
 ## Development
 
@@ -34,6 +34,6 @@ Make sure:
     IGPU_RENDER_DEVICE_ID
 
 in `.devcontainer/.env` contain proper values.
-TODO: automate card detection and selection on the jukebox node end
+TODO: automate card detection and selection on the jukebox node.
 
 Then simply open this project in any IDE that supports devcontainers (VSCode is recommended).

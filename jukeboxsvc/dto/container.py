@@ -60,8 +60,8 @@ class RunContainerRequestDTO:
             runner: Runner
             video_enc: VideoEnc = field(metadata={"by_value": True})  # streamd requirement
 
-            def image_tag(self) -> str:
-                res = "{}_{}_{}_{}_{}".format(  # pylint: disable=consider-using-f-string
+            def image_name_with_tag(self) -> str:
+                res = "{}_{}_{}_{}:{}".format(  # pylint: disable=consider-using-f-string
                     self.runner.window_system,
                     self.video_enc,
                     self.runner.name,

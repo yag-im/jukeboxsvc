@@ -31,7 +31,7 @@ def log_input_output(func):
 
 
 def get_cluster_client(
-    api_uri: str, ecr_login: bool = False, timeout: int = DOCKER_CLIENT_TIMEOUT
+    api_uri: str, timeout: int = DOCKER_CLIENT_TIMEOUT, ecr_login: bool = False
 ) -> docker.DockerClient:
     client = docker.DockerClient(base_url=api_uri, timeout=timeout, version=DOCKER_CLIENT_VER)
     # TODO: watch for https://github.com/docker/docker-py/issues/3217 and drop "if" below once resolved

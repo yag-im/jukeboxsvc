@@ -15,26 +15,8 @@ POST http://localhost/cluster/pull_image
 content-type: application/json
 
 {
-    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
-    "tag": "x11_gpu-intel_scummvm_2.8.1_latest"
-}
-###
-
-POST http://localhost/cluster/pull_image
-content-type: application/json
-
-{
-    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
-    "tag": "x11_cpu_dosbox-x_2024.03.01_latest"
-}
-###
-
-POST http://localhost/cluster/pull_image
-content-type: application/json
-
-{
-    "repository": "070143334704.dkr.ecr.us-east-1.amazonaws.com/im.acme.yag.jukebox",
-    "tag": "x11_cpu_wine_stable_latest"
+    "repository": "ghcr.io/yag-im/jukebox/x11_gpu-intel_scummvm_2.8.1",
+    "tag": "latest"
 }
 ###
 
