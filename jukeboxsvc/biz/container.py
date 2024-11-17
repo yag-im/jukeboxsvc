@@ -50,7 +50,7 @@ class Container:
                 memory_shared=c.attrs["HostConfig"]["ShmSize"],
             ),
             env_vars=ContainerRunSpecs.EnvVars(
-                **{f.name: env_vars[f.name] for f in dataclasses.fields(ContainerRunSpecs.EnvVars)}
+                **{f.name: env_vars.get(f.name, None) for f in dataclasses.fields(ContainerRunSpecs.EnvVars)}
             ),
             labels=ContainerRunSpecs.Labels(**c.labels),
         )
