@@ -1,5 +1,6 @@
 import datetime
 import typing as t
+from dataclasses import fields
 
 from marshmallow import Schema
 from marshmallow_dataclass import dataclass
@@ -52,6 +53,12 @@ class ContainerRunSpecs:
         app_release_uuid: str
         app_slug: str
         user_id: str
+
+        def __init__(self, **kwargs: t.Any) -> None:
+            # ignoring here extra container labels, e.g. org.opencontainer.image.created
+            for field in fields(self):
+                if field.name in kwargs:
+                    setattr(self, field.name, kwargs[field.name])
 
     attrs: Attrs
     env_vars: EnvVars
