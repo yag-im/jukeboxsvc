@@ -67,7 +67,7 @@ class Node:
     def run_container(
         self,
         run_specs: ContainerRunSpecs,
-        auto_remove: bool = True,
+        auto_remove: bool = False,
         detach: bool = True,
         devices: t.Optional[list[str]] = None,
         mounts: t.Optional[list[Mount]] = None,
