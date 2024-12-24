@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
 
+import docker
 import rdrand
 from docker.types import Mount
 from fabric import Connection
@@ -222,12 +223,16 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",
     ]
+    device_requests = None
     # TODO: gpu devices should be in sync with igpu/dgpu requirements, and e.g. WLR_RENDER_DRM_DEVICE
     igpu_card_id = os.getenv("IGPU_CARD_ID", "0")
     igpu_render_device_id = os.getenv("IGPU_RENDER_DEVICE_ID", "128")
     if run_specs.reqs.container.video_enc == VideoEnc.GPU_INTEL:
         devices.append(f"/dev/dri/card{igpu_card_id}:/dev/dri/card{igpu_card_id}:rwm")
         devices.append(f"/dev/dri/renderD{igpu_render_device_id}:/dev/dri/renderD{igpu_render_device_id}:rwm")
+    elif run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
+        device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+
     if run_specs.reqs.container.runner.window_system == WindowSystem.X11:
         # TODO: can't use a simpler formula (e.g. 10+len(node.containers)) cos it may end up with duplicate displays
         # as our local state is not in sync with a real cluster state
@@ -242,6 +247,25 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
 
     image_name_with_tag = run_specs.reqs.container.image_name_with_tag()
     docker_image_tag = f"{jukebox_docker_repo_prefix}/{image_name_with_tag}"
+    env_vars = {
+        "DISPLAY": env_display,
+        "SHOW_POINTER": env_show_pointer,
+        "COLOR_BITS": run_specs.reqs.app.color_bits,
+        "FPS": fps,
+        "MAX_INACTIVITY_PERIOD": jukebox_contaienr_streamd_max_inactivity_period,
+        "RUN_MIDI_SYNTH": "true" if run_specs.reqs.app.midi else "false",
+        "SCREEN_HEIGHT": run_specs.reqs.app.screen_height,
+        "SCREEN_WIDTH": run_specs.reqs.app.screen_width,
+        "SIGNALER_AUTH_TOKEN": signaler_auth_token,
+        "SIGNALER_HOST": signaler_host,
+        "SIGNALER_URI": signaler_uri,
+        "STUN_URI": stun_uri,
+        "WS_CONN_ID": run_specs.ws_conn.id,
+        "WS_CONSUMER_ID": run_specs.ws_conn.consumer_id,
+        "GST_DEBUG": jukebox_container_env_gst_debug,
+    }
+    if run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
+        env_vars["NVIDIA_DRIVER_CAPABILITIES"] = "all"
     run_container_res = node.run_container(
         run_specs=ContainerRunSpecs(
             attrs=ContainerRunSpecs.Attrs(
@@ -252,23 +276,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
                 name=_gen_container_name(run_specs),
                 nanocpus_limit=run_specs.reqs.hw.nanocpus,
             ),
-            env_vars=ContainerRunSpecs.EnvVars(
-                DISPLAY=env_display,
-                SHOW_POINTER=env_show_pointer,
-                COLOR_BITS=run_specs.reqs.app.color_bits,
-                FPS=fps,
-                MAX_INACTIVITY_PERIOD=jukebox_contaienr_streamd_max_inactivity_period,
-                RUN_MIDI_SYNTH="true" if run_specs.reqs.app.midi else "false",
-                SCREEN_HEIGHT=run_specs.reqs.app.screen_height,
-                SCREEN_WIDTH=run_specs.reqs.app.screen_width,
-                SIGNALER_AUTH_TOKEN=signaler_auth_token,
-                SIGNALER_HOST=signaler_host,
-                SIGNALER_URI=signaler_uri,
-                STUN_URI=stun_uri,
-                WS_CONN_ID=run_specs.ws_conn.id,
-                WS_CONSUMER_ID=run_specs.ws_conn.consumer_id,
-                GST_DEBUG=jukebox_container_env_gst_debug,
-            ),
+            env_vars=ContainerRunSpecs.EnvVars(**env_vars),  # type: ignore[arg-type]
             labels=ContainerRunSpecs.Labels(
                 app_slug=str(run_specs.app_descr.slug),
                 app_release_uuid=str(run_specs.app_descr.release_uuid),
@@ -276,6 +284,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
             ),
         ),
         devices=devices,
+        device_requests=device_requests,
         mounts=[
             Mount(
                 type="volume",

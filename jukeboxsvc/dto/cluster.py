@@ -47,6 +47,7 @@ class ContainerRunSpecs:
         # x11-specific vars
         DISPLAY: t.Optional[str] = None
         SHOW_POINTER: t.Optional[bool] = None
+        NVIDIA_DRIVER_CAPABILITIES: t.Optional[str] = None
 
     @dataclass
     class Labels:
