@@ -11,7 +11,6 @@ from multiprocessing import Process
 from pathlib import Path
 
 import docker
-import rdrand
 from docker.types import Mount
 from fabric import Connection
 from invoke.exceptions import UnexpectedExit
@@ -236,8 +235,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     if run_specs.reqs.container.runner.window_system == WindowSystem.X11:
         # TODO: can't use a simpler formula (e.g. 10+len(node.containers)) cos it may end up with duplicate displays
         # as our local state is not in sync with a real cluster state
-        r = rdrand.RdRandom()
-        env_display = f":{r.randint(100, 50000)}"  # :10, :11 etc, they shouldn't intersect!
+        # :10, :11 etc, they shouldn't intersect!
+        env_display = f":{random.randint(100, 50000)}"  # nosec B311
         env_show_pointer = _show_pointer(run_specs.reqs.container.runner.name)
     else:
         env_display = None

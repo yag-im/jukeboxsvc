@@ -24,7 +24,6 @@ marshmallow = "^3.20.2"
 marshmallow-dataclass = "^8.6.0"
 opentelemetry-distro = "*"
 opentelemetry-exporter-otlp = "*"
-rdrand = "^1.5.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "*"
