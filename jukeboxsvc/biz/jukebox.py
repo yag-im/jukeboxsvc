@@ -218,7 +218,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         raise ClusterOutOfResourcesException()
     # choosing a random free core to reduce races
     # running docker container without a cpu affinity significantly degrades performance even of a single running app
-    cpu_core = random.choice(list(node.free_cores()))  # nosec B311
+    cpu_cores = random.sample(list(node.free_cores()), k=2)  # nosec B311
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",
     ]
@@ -268,7 +268,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     run_container_res = node.run_container(
         run_specs=ContainerRunSpecs(
             attrs=ContainerRunSpecs.Attrs(
-                cpuset_cpus=[cpu_core],
+                cpuset_cpus=cpu_cores,
                 image_tag=docker_image_tag,
                 memory_limit=run_specs.reqs.hw.memory,
                 memory_shared=run_specs.reqs.hw.memory_shared,
