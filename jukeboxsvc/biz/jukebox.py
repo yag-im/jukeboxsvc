@@ -37,6 +37,8 @@ from jukeboxsvc.dto.container import (
     WindowSystem,
 )
 
+NUM_CORES_PER_CONTAINER = 1
+
 log = logging.getLogger("jukeboxsvc")
 
 
@@ -218,7 +220,9 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         raise ClusterOutOfResourcesException()
     # choosing a random free core to reduce races
     # running docker container without a cpu affinity significantly degrades performance even of a single running app
-    cpu_cores = random.sample(list(node.free_cores()), k=2)  # nosec B311
+    # TODO: investigate why using more than 1 core slows down the app;
+    # e.g. in Syberia 1, sound becomes choppy when using more than 1 core.
+    cpu_cores = random.sample(list(node.free_cores()), k=NUM_CORES_PER_CONTAINER)  # nosec B311
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",
     ]
@@ -263,8 +267,12 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         "WS_CONSUMER_ID": run_specs.ws_conn.consumer_id,
         "GST_DEBUG": jukebox_container_env_gst_debug,
     }
+    privileged = False
     if run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
         env_vars["NVIDIA_DRIVER_CAPABILITIES"] = "all"
+        # TODO: investigate if we can run nvidia-container-runtime without privileged mode,
+        # it was possible in Debian 11, but not in 12
+        privileged = True
     run_container_res = node.run_container(
         run_specs=ContainerRunSpecs(
             attrs=ContainerRunSpecs.Attrs(
@@ -293,6 +301,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
                 read_only=False,
             )
         ],
+        privileged=privileged,
     )
     return RunContainerResponseDTO.Schema().load(run_container_res)
 
