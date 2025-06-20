@@ -15,8 +15,8 @@ POST http://localhost/cluster/pull_image
 content-type: application/json
 
 {
-    "repository": "ghcr.io/yag-im/jukebox/x11_gpu-intel_scummvm_2.8.1",
-    "tag": "latest"
+    "repository": "ghcr.io/yag-im/jukebox/x11_gpu-intel_scummvm",
+    "tag": "2.9.0"
 }
 ###
 
@@ -35,10 +35,9 @@ content-type: application/json
             "screen_width": 640
         },
         "container": {
-            "image_rev": "latest",
             "runner": {
                 "name": "scummvm",
-                "ver": "2.8.1",
+                "ver": "2.9.0",
                 "window_system": "x11"
             },
             "video_enc": "cpu"

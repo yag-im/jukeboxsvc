@@ -2,6 +2,7 @@ import dataclasses
 import logging
 import typing as t
 
+import docker
 from docker.errors import (
     APIError,
     NotFound,
@@ -70,6 +71,7 @@ class Node:
         auto_remove: bool = True,
         detach: bool = True,
         devices: t.Optional[list[str]] = None,
+        device_requests: t.Optional[list[docker.types.DeviceRequest]] = None,
         mounts: t.Optional[list[Mount]] = None,
         network_mode: str = "host",  # cos webrtc requires a lot of UDP ports
         privileged: bool = False,
@@ -80,6 +82,7 @@ class Node:
             cpuset_cpus=",".join(map(str, run_specs.attrs.cpuset_cpus)),
             detach=detach,
             devices=devices,
+            device_requests=device_requests,
             environment=dataclasses.asdict(run_specs.env_vars),
             image=run_specs.attrs.image_tag,
             labels=dataclasses.asdict(run_specs.labels),

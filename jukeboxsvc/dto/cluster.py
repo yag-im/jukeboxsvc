@@ -47,6 +47,7 @@ class ContainerRunSpecs:
         # x11-specific vars
         DISPLAY: t.Optional[str] = None
         SHOW_POINTER: t.Optional[bool] = None
+        NVIDIA_DRIVER_CAPABILITIES: t.Optional[str] = None
 
     @dataclass
     class Labels:
@@ -80,8 +81,8 @@ class ClusterStateResponseDTO:
         class Container:
             created: datetime.datetime
             id: str
-            specs: t.Optional[ContainerRunSpecs]  # e.g. not avail for a paused container
-            stats: ContainerStats
+            specs: ContainerRunSpecs
+            stats: t.Optional[ContainerStats]  # e.g. not avail for a paused container
             status: str
 
         attrs: NodeAttrs
