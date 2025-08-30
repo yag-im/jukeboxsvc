@@ -75,6 +75,7 @@ class Node:
         mounts: t.Optional[list[Mount]] = None,
         network_mode: str = "host",  # cos webrtc requires a lot of UDP ports
         privileged: bool = False,
+        cap_add: t.Optional[list[str]] = None,
     ) -> dict[str, t.Any]:
         client = get_cluster_client(self.api_uri, timeout=55)
         c = client.containers.run(
@@ -94,6 +95,7 @@ class Node:
             remove=auto_remove,  # TODO: double?
             shm_size=run_specs.attrs.memory_shared,
             mounts=mounts,
+            cap_add=cap_add,
         )
 
         return {"node": {"api_uri": self.api_uri, "id": self.id, "region": self.region}, "container": {"id": c.id}}

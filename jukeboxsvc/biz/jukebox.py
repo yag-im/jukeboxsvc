@@ -223,6 +223,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     # TODO: investigate why using more than 1 core slows down the app;
     # e.g. in Syberia 1, sound becomes choppy when using more than 1 core.
     cpu_cores = random.sample(list(node.free_cores()), k=NUM_CORES_PER_CONTAINER)  # nosec B311
+    cap_add = []
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",
     ]
@@ -235,6 +236,10 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         devices.append(f"/dev/dri/renderD{igpu_render_device_id}:/dev/dri/renderD{igpu_render_device_id}:rwm")
     elif run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
         device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+
+    if run_specs.reqs.container.runner.name == "qemu":
+        devices.append("/dev/kvm:/dev/kvm")
+        cap_add.append("SYS_ADMIN")
 
     if run_specs.reqs.container.runner.window_system == WindowSystem.X11:
         # TODO: can't use a simpler formula (e.g. 10+len(node.containers)) cos it may end up with duplicate displays
@@ -302,6 +307,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
             )
         ],
         privileged=privileged,
+        cap_add=cap_add,
     )
     return RunContainerResponseDTO.Schema().load(run_container_res)
 
