@@ -39,6 +39,13 @@ from jukeboxsvc.dto.container import (
 
 NUM_CORES_PER_CONTAINER = 1
 
+DOSBOX_LOADING_DURATION = 2
+DOSBOX_X_LOADING_DURATION = 5
+QEMU_LOADING_DURATION = 5
+SCUMMVM_LOADING_DURATION = 0
+WINE_LOADING_DURATION = 0
+RETROARCH_LOADING_DURATION = 12
+
 log = logging.getLogger("jukeboxsvc")
 
 
@@ -185,6 +192,23 @@ def _show_pointer(runner_name: str) -> bool:
     return False
 
 
+def get_runner_loading_duration(run_specs: RunContainerRequestDTO) -> int:
+    runner_name = run_specs.reqs.container.runner.name
+    if runner_name == "scummvm":
+        return SCUMMVM_LOADING_DURATION
+    elif runner_name == "dosbox-x":
+        return DOSBOX_X_LOADING_DURATION
+    elif runner_name == "wine":
+        return WINE_LOADING_DURATION
+    elif runner_name == "qemu":
+        return QEMU_LOADING_DURATION
+    elif runner_name == "dosbox" or runner_name == "dosbox-staging":
+        return DOSBOX_LOADING_DURATION
+    elif runner_name == "retroarch":
+        return RETROARCH_LOADING_DURATION
+    return int(os.getenv("JUKEBOX_CONTAINER_STREAMD_LOADING_DURATION", "5"))
+
+
 @log_input_output
 def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     """Spins up a new container in the cluster.
@@ -202,8 +226,9 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     stun_uri = os.environ["STUN_URI"]
     jukebox_container_app_path = os.environ["JUKEBOX_CONTAINER_APP_DIR"]
     jukebox_container_env_gst_debug = os.getenv("JUKEBOX_CONTAINER_ENV_GST_DEBUG")
-    jukebox_contaienr_streamd_max_inactivity_period = int(
-        os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_PERIOD", "3600")
+    jukebox_container_streamd_loading_duration = get_runner_loading_duration(run_specs)
+    jukebox_contaienr_streamd_max_inactivity_duration = int(
+        os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_DURATION", "1800")
     )
     jukebox_docker_repo_prefix = os.environ["JUKEBOX_DOCKER_REPO_PREFIX"]  # e.g. ghcr.io/yag-im/jukebox
 
@@ -260,7 +285,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         "SHOW_POINTER": env_show_pointer,
         "COLOR_BITS": run_specs.reqs.app.color_bits,
         "FPS": fps,
-        "MAX_INACTIVITY_PERIOD": jukebox_contaienr_streamd_max_inactivity_period,
+        "LOADING_DURATION": jukebox_container_streamd_loading_duration,
+        "MAX_INACTIVITY_DURATION": jukebox_contaienr_streamd_max_inactivity_duration,
         "RUN_MIDI_SYNTH": "true" if run_specs.reqs.app.midi else "false",
         "SCREEN_HEIGHT": run_specs.reqs.app.screen_height,
         "SCREEN_WIDTH": run_specs.reqs.app.screen_width,
