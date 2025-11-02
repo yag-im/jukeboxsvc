@@ -47,6 +47,7 @@ class RunContainerRequestDTO:
             midi: bool
             screen_height: int
             screen_width: int
+            loading_duration: t.Optional[int]  # in seconds
 
         @dataclass
         class ContainerSpecs:

@@ -226,7 +226,9 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     stun_uri = os.environ["STUN_URI"]
     jukebox_container_app_path = os.environ["JUKEBOX_CONTAINER_APP_DIR"]
     jukebox_container_env_gst_debug = os.getenv("JUKEBOX_CONTAINER_ENV_GST_DEBUG")
-    jukebox_container_streamd_loading_duration = get_runner_loading_duration(run_specs)
+    jukebox_container_streamd_loading_duration = get_runner_loading_duration(run_specs) + (
+        run_specs.reqs.app.loading_duration or 0
+    )
     jukebox_contaienr_streamd_max_inactivity_duration = int(
         os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_DURATION", "1800")
     )
