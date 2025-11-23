@@ -238,8 +238,12 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         rnd = str(uuid.uuid4())[:8]
         return f"jukebox_{run_specs.user_id}_{run_specs.app_descr.slug}_{rnd}"
 
+    log.info("getting nodes list started")
+    nodes = list(JUKEBOX_CLUSTER.updated().nodes.values())
+    log.info("getting nodes list finished, %d nodes available", len(nodes))
+
     node = pick_best_node(
-        nodes=list(JUKEBOX_CLUSTER.updated().nodes.values()),
+        nodes=nodes,
         regions=run_specs.preferred_dcs,
         reqs=NodeRequirements(igpu=run_specs.reqs.hw.igpu, dgpu=run_specs.reqs.hw.dgpu),
     )
