@@ -26,7 +26,8 @@ content-type: application/json
 {
     "app_descr": {
         "slug": "the-pink-panther-hokus-pokus-pink",
-        "release_uuid": "780a21c5-5635-4a6d-aece-c9267b4ac8ff"
+        "release_uuid": "780a21c5-5635-4a6d-aece-c9267b4ac8ff",
+        "platform": "win"
     },
     "reqs": {
         "app": {

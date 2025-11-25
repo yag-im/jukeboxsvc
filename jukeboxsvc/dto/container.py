@@ -23,6 +23,13 @@ class VideoEnc(StrEnum):
     GPU_NVIDIA = "gpu-nvidia"
 
 
+class AppPlatform(StrEnum):
+    DOS = "dos"
+    PHILIPS_CD_I = "philips-cd-i"
+    WINDOWS = "win"
+    ZX_SPECTRUM = "zxs"
+
+
 @dataclass
 class WsConnDC:
     """Websocket connection (sigsvc) parameters."""
@@ -38,6 +45,7 @@ class RunContainerRequestDTO:
         # slug and release_uuid are also parts of an app path in appstor
         slug: str  # igdb slug, e.g. the-pink-panther-hokus-pokus-pink
         release_uuid: str  # unique release id, e.g.: 653cc955-8e32-4fb6-b44c-5d43897e0219
+        platform: AppPlatform = field(metadata={"by_value": True})
 
     @dataclass
     class Requirements:

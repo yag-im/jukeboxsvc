@@ -39,12 +39,13 @@ from jukeboxsvc.dto.container import (
 
 NUM_CORES_PER_CONTAINER = 1
 
-DOSBOX_LOADING_DURATION = 2
-DOSBOX_X_LOADING_DURATION = 5
+DOSBOX_DOS_LOADING_DURATION = 2
+DOSBOX_WIN_LOADING_DURATION = 5
 QEMU_LOADING_DURATION = 5
 SCUMMVM_LOADING_DURATION = 0
 WINE_LOADING_DURATION = 0
-RETROARCH_LOADING_DURATION = 12
+RETROARCH_PHILIPS_CD_I_LOADING_DURATION = 12
+RETROARCH_ZXS_LOADING_DURATION = 0
 
 log = logging.getLogger("jukeboxsvc")
 
@@ -194,18 +195,23 @@ def _show_pointer(runner_name: str) -> bool:
 
 def get_runner_loading_duration(run_specs: RunContainerRequestDTO) -> int:
     runner_name = run_specs.reqs.container.runner.name
+    platform = run_specs.app_descr.platform
     if runner_name == "scummvm":
         return SCUMMVM_LOADING_DURATION
-    elif runner_name == "dosbox-x":
-        return DOSBOX_X_LOADING_DURATION
     elif runner_name == "wine":
         return WINE_LOADING_DURATION
     elif runner_name == "qemu":
         return QEMU_LOADING_DURATION
-    elif runner_name == "dosbox" or runner_name == "dosbox-staging":
-        return DOSBOX_LOADING_DURATION
+    elif runner_name == "dosbox" or runner_name == "dosbox-staging" or runner_name == "dosbox-x":
+        if platform == "dos":
+            return DOSBOX_DOS_LOADING_DURATION
+        elif platform == "win":
+            return DOSBOX_WIN_LOADING_DURATION
     elif runner_name == "retroarch":
-        return RETROARCH_LOADING_DURATION
+        if platform == "philips-cd-i":
+            return RETROARCH_PHILIPS_CD_I_LOADING_DURATION
+        elif platform == "zxs":
+            return RETROARCH_ZXS_LOADING_DURATION
     return int(os.getenv("JUKEBOX_CONTAINER_STREAMD_LOADING_DURATION", "5"))
 
 
