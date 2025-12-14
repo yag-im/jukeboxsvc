@@ -25,6 +25,7 @@ class VideoEnc(StrEnum):
 
 class AppPlatform(StrEnum):
     DOS = "dos"
+    MAC = "mac"
     PHILIPS_CD_I = "philips-cd-i"
     WINDOWS = "win"
     ZX_SPECTRUM = "zxs"
