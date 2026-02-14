@@ -9,6 +9,8 @@
         //"host", // because appstor vms' ssh works only through 127.0.0.1 (required for creating remote clones)
         "--add-host",
         "host.docker.internal:host-gateway",
+        "--add-host",
+        "sessionsvc.yag.dc:host-gateway",
         "--env-file",
         "${localWorkspaceFolder}/.devcontainer/.env",
         "--env-file",

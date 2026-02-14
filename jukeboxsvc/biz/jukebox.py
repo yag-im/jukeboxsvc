@@ -18,6 +18,7 @@ from invoke.exceptions import UnexpectedExit
 from jukeboxsvc.biz.cluster import (
     JUKEBOX_CLUSTER,
     Cluster,
+    get_cluster_state_quick,
 )
 from jukeboxsvc.biz.container import ContainerRunSpecs
 from jukeboxsvc.biz.errors import (
@@ -90,7 +91,7 @@ def resume_container(node_id: str, container_id: str, req: ResumeContainerReques
 
 
 @log_input_output
-def pick_best_node(nodes: list[Node], regions: list[DcRegion], reqs: NodeRequirements) -> t.Optional[Node]:
+def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optional[Node]:
     """Picks a node with lower resources usage as per requirements.
 
     The selected node should surpass the other nodes in meeting the provided requirements. Note that region and gpu
@@ -102,8 +103,6 @@ def pick_best_node(nodes: list[Node], regions: list[DcRegion], reqs: NodeRequire
         ...
 
     Args:
-        nodes:
-            List of all available nodes in the cluster.
         regions:
             List of regions ordered by a preference criteria (e.g. best latency).
         reqs:
@@ -112,6 +111,15 @@ def pick_best_node(nodes: list[Node], regions: list[DcRegion], reqs: NodeRequire
     Returns:
         Best matching node or None if we're out of resources in all regions :(.
     """
+
+    # pylint: disable=pointless-string-statement
+    """
+    TODO: getting JUKEBOX_CLUSTER.updated() is pretty heavy, up to 10 seconds to complete depending on the number of
+    running containers in the cluster.
+
+    log.info("getting nodes list started")
+    nodes = list(JUKEBOX_CLUSTER.updated().nodes.values())
+    log.info("getting nodes list finished, %d nodes available", len(nodes))
 
     regions_weighted = dict(zip(regions, range(1, len(regions) + 1)))
     dgpu_weighted = {reqs.dgpu: 1, not reqs.dgpu: 2}
@@ -129,6 +137,26 @@ def pick_best_node(nodes: list[Node], regions: list[DcRegion], reqs: NodeRequire
     for node in sorted_nodes:
         free_cores = node.free_cores()
         if free_cores:
+            return node
+    return None
+    """
+
+    nodes = JUKEBOX_CLUSTER.nodes.values()  # can be an obsolete state, but it is ok for a best effort scheduling
+    regions_weighted = dict(zip(regions, range(1, len(regions) + 1)))
+    dgpu_weighted = {reqs.dgpu: 1, not reqs.dgpu: 2}
+    igpu_weighted = {reqs.igpu: 1, not reqs.igpu: 2}
+    sorted_nodes = sorted(
+        nodes,
+        key=lambda n: (
+            regions_weighted.get(n.region, 1000),
+            dgpu_weighted.get(n.attrs.dgpu),
+            igpu_weighted.get(n.attrs.igpu),
+        ),
+    )
+    cluster_state_quick = get_cluster_state_quick()
+    for node in sorted_nodes:
+        node_ = cluster_state_quick.get_node(node.id)
+        if node_ and cluster_state_quick.get_free_cores(node_.id):
             return node
     return None
 
@@ -244,12 +272,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         rnd = str(uuid.uuid4())[:8]
         return f"jukebox_{run_specs.user_id}_{run_specs.app_descr.slug}_{rnd}"
 
-    log.info("getting nodes list started")
-    nodes = list(JUKEBOX_CLUSTER.updated().nodes.values())
-    log.info("getting nodes list finished, %d nodes available", len(nodes))
-
     node = pick_best_node(
-        nodes=nodes,
         regions=run_specs.preferred_dcs,
         reqs=NodeRequirements(igpu=run_specs.reqs.hw.igpu, dgpu=run_specs.reqs.hw.dgpu),
     )
@@ -259,7 +282,10 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     # running docker container without a cpu affinity significantly degrades performance even of a single running app
     # TODO: investigate why using more than 1 core slows down the app;
     # e.g. in Syberia 1, sound becomes choppy when using more than 1 core.
-    cpu_cores = random.sample(list(node.free_cores()), k=NUM_CORES_PER_CONTAINER)  # nosec B311
+    cluster_state_quick = get_cluster_state_quick()
+    cpu_cores = random.sample(
+        list(cluster_state_quick.get_free_cores(node.id)), k=NUM_CORES_PER_CONTAINER
+    )  # nosec B311
     cap_add = []
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",

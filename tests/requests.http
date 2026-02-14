@@ -6,6 +6,9 @@ GET http://host.docker.internal:12375/v1.45/images/json
 GET http://host.docker.internal:12376/v1.45/images/json
 ###
 
+GET http://host.docker.internal:2375/v1.45/info
+###
+
 # check jukeboxsvc api
 
 GET http://localhost/cluster/state

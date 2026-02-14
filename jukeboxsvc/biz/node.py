@@ -98,7 +98,10 @@ class Node:
             cap_add=cap_add,
         )
 
-        return {"node": {"api_uri": self.api_uri, "id": self.id, "region": self.region}, "container": {"id": c.id}}
+        return {
+            "node": {"api_uri": self.api_uri, "id": self.id, "region": self.region},
+            "container": {"id": c.id, "cpuset_cpus": run_specs.attrs.cpuset_cpus},
+        }
 
     def stop_container(self, container_id: str) -> None:
         try:
