@@ -162,7 +162,7 @@ def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optiona
 
 
 def _get_clone_subpath(run_specs: RunContainerRequestDTO) -> str:
-    return f"{run_specs.user_id}/{run_specs.app_descr.slug}/{run_specs.app_descr.release_uuid}"
+    return f"{run_specs.user_id}/{run_specs.app_descr.slug}/{run_specs.app_descr.get_app_path_release_uuid()}"
 
 
 @log_input_output
@@ -179,14 +179,17 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
     if not appstor_nodes:
         # pure local host setup (for local dev mode only)
         src_path: Path = (
-            Path(os.environ["DATA_DIR"]) / "apps" / run_specs.app_descr.slug / run_specs.app_descr.release_uuid
+            Path(os.environ["DATA_DIR"])
+            / "apps"
+            / run_specs.app_descr.slug
+            / run_specs.app_descr.get_app_path_release_uuid()
         )
         dst_path: Path = (
             Path(os.environ["DATA_DIR"])
             / "clones"
             / str(run_specs.user_id)
             / run_specs.app_descr.slug
-            / run_specs.app_descr.release_uuid
+            / run_specs.app_descr.get_app_path_release_uuid()
         )
         if not dst_path.exists():
             shutil.copytree(src_path, dst_path, symlinks=True)
@@ -196,7 +199,7 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
     if not appstor_instance:
         raise JukeboxOpException(message=f"no appstor instancees in specified region: {region}")
     cmd = f"/opt/yag/appstor/clone_app.sh {run_specs.user_id} {run_specs.app_descr.slug} \
-        {run_specs.app_descr.release_uuid}"
+        {run_specs.app_descr.get_app_path_release_uuid()}"
     try:
         clone_res = Connection(
             host=appstor_instance["host"],

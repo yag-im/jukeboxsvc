@@ -45,8 +45,12 @@ class RunContainerRequestDTO:
     class AppDescr:
         # slug and release_uuid are also parts of an app path in appstor
         slug: str  # igdb slug, e.g. the-pink-panther-hokus-pokus-pink
-        release_uuid: str  # unique release id, e.g.: 653cc955-8e32-4fb6-b44c-5d43897e0219
+        release_uuid: str  # unique release id, e.g.: 019c887a-f4e2-7dcc-a793-678c0e0b9f6e
+        release_uuidv4: str | None  # legacy release uuid; part of app path in appstor for older releases
         platform: AppPlatform = field(metadata={"by_value": True})
+
+        def get_app_path_release_uuid(self) -> str:
+            return self.release_uuidv4 or self.release_uuid
 
     @dataclass
     class Requirements:
