@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+import time
 import typing as t
 
 import boto3
@@ -19,12 +20,13 @@ def log_input_output(func):
         log.debug("calling %s with args: %s, kwargs: %s", func.__name__, args, kwargs)
 
         # Call the original function
+        start = time.perf_counter()
         result = func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
 
-        # Log the return value
-        log.debug("%s returned: %s", func.__name__, repr(result))
+        # Log the return value and execution time
+        log.debug("%s returned: %s (took %.3fs)", func.__name__, repr(result), elapsed)
 
-        # Return the result
         return result
 
     return wrap
