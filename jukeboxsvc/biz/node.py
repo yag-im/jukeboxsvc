@@ -44,10 +44,12 @@ class Node:
         self._update()
 
     def __repr__(self) -> str:
-        return repr(
-            dict(
-                (key, value) for key, value in self.__dict__.items() if not callable(value) and not key.startswith("__")
-            )
+        container_ids = list(self.containers.keys()) if hasattr(self, "containers") else []
+        return (
+            f"Node(id={getattr(self, 'id', None)}, region={self.region}, "
+            f"containers={len(container_ids)}, container_ids={container_ids}, "
+            f"cpu_usage_total={self.cpu_usage_total:.1f}, memory_usage_total={self.memory_usage_total:.1f}, "
+            f"attrs={getattr(self, 'attrs', None)})"
         )
 
     def _get_container(self, container_id: str) -> DockerContainer:
