@@ -267,7 +267,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         run_specs.reqs.app.loading_duration or 0
     )
     jukebox_contaienr_streamd_max_inactivity_duration = int(
-        os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_DURATION", "1800")
+        os.getenv("JUKEBOX_CONTAINER_STREAMD_MAX_INACTIVITY_DURATION", "600")
     )
     jukebox_docker_repo_prefix = os.environ["JUKEBOX_DOCKER_REPO_PREFIX"]  # e.g. ghcr.io/yag-im/jukebox
 
