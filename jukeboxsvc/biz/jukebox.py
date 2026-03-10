@@ -288,9 +288,12 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     # TODO: investigate why using more than 1 core slows down the app;
     # e.g. in Syberia 1, sound becomes choppy when using more than 1 core.
     cluster_state_quick = get_cluster_state_quick()
-    cpu_cores = random.sample(
-        list(cluster_state_quick.get_free_cores(node.id)), k=NUM_CORES_PER_CONTAINER
-    )  # nosec B311
+    free_cores = cluster_state_quick.get_free_cores(node.id)
+    # reserve core 0 for admin access in US_WEST_1 region
+    if node.region == DcRegion.US_WEST_1 and run_specs.user_id != 0:
+        if 0 in free_cores:
+            free_cores.remove(0)
+    cpu_cores = random.sample(list(free_cores), k=NUM_CORES_PER_CONTAINER)  # nosec B311
     cap_add = []
     devices = [
         "/dev/snd/seq:/dev/snd/seq:rwm",
