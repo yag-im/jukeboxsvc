@@ -13,6 +13,8 @@ from jukeboxsvc.biz.jukebox import (
 from jukeboxsvc.biz.node import Node
 from jukeboxsvc.dto.container import DcRegion
 
+NUM_CPUS_PER_NODE = 8
+
 
 def mock_container(cpu_cpuset: list[int], cpu_usage: float) -> mock.MagicMock:
     container = mock.MagicMock(spec=Container)
@@ -52,7 +54,7 @@ class TestJukebox:
 
             def get_node(node_id: str):
                 if node_id in cluster.nodes:
-                    return MagicMock(id=node_id)
+                    return cluster.nodes.get(node_id)
                 return None
 
             def get_free_cores(node_id: str):
@@ -74,7 +76,7 @@ class TestJukebox:
         nodes = [
             mock_node(
                 region=DcRegion.US_EAST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=False,
                 containers=[
@@ -92,13 +94,13 @@ class TestJukebox:
         reqs = NodeRequirements(dgpu=False, igpu=False)
         patch_cluster_state(nodes, {nodes[0].id: {4}})
         best_node = pick_best_node(pref_regions, reqs)
-        assert best_node == nodes[0] and best_node.free_cores() == {4}
+        assert best_node is None
 
         # only node in the desired region is fully loaded
         nodes = [
             mock_node(
                 region=DcRegion.US_EAST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=False,
                 containers=[
@@ -112,7 +114,7 @@ class TestJukebox:
             ),
             mock_node(
                 region=DcRegion.US_WEST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=False,
                 containers=[
@@ -131,20 +133,20 @@ class TestJukebox:
         reqs = NodeRequirements(dgpu=False, igpu=False)
         patch_cluster_state(nodes, {nodes[0].id: {4, 5}, nodes[1].id: set()})
         best_node = pick_best_node(pref_regions, reqs)
-        assert best_node == nodes[0] and best_node.free_cores() == {4, 5}
+        assert best_node is None
 
         # requesting dgpu node
         nodes = [
             mock_node(
                 region=DcRegion.US_WEST_1,
-                num_cpus=16,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=False,
                 containers=[],
             ),
             mock_node(
                 region=DcRegion.US_EAST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=True,
                 containers=[
@@ -159,7 +161,7 @@ class TestJukebox:
             ),
             mock_node(
                 region=DcRegion.US_WEST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=True,
                 containers=[
@@ -173,7 +175,7 @@ class TestJukebox:
             ),
             mock_node(
                 region=DcRegion.US_WEST_1,
-                num_cpus=8,
+                num_cpus=NUM_CPUS_PER_NODE,
                 igpu=True,
                 dgpu=False,
                 containers=[
@@ -193,3 +195,82 @@ class TestJukebox:
         patch_cluster_state(nodes, {nodes[2].id: {4, 5}})
         best_node = pick_best_node(pref_regions, reqs)
         assert best_node == nodes[2] and best_node.free_cores() == {4, 5}
+
+        # stick to a single DC (negative)
+        nodes = [
+            mock_node(
+                region=DcRegion.US_WEST_1,
+                num_cpus=NUM_CPUS_PER_NODE,
+                igpu=True,
+                dgpu=False,
+                containers=[
+                    mock_container(cpu_cpuset=[7], cpu_usage=67.78),
+                    mock_container(cpu_cpuset=[6], cpu_usage=99.93),
+                    mock_container(cpu_cpuset=[1], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[2], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[3], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[4], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[5], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[0], cpu_usage=12.33),
+                ],
+            ),
+            mock_node(
+                region=DcRegion.US_EAST_1,
+                num_cpus=NUM_CPUS_PER_NODE,
+                igpu=True,
+                dgpu=False,
+                containers=[
+                    mock_container(cpu_cpuset=[6], cpu_usage=99.93),
+                    mock_container(cpu_cpuset=[1], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[2], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[3], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[4], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[5], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[0], cpu_usage=12.33),
+                ],
+            ),
+        ]
+        pref_regions = [DcRegion.US_WEST_1, DcRegion.US_EAST_1]
+        reqs = NodeRequirements(dgpu=True, igpu=False)
+        patch_cluster_state(nodes, {nodes[1].id: {7}})
+        best_node = pick_best_node(pref_regions, reqs)
+        assert best_node is None
+
+        # stick to a single DC (positive)
+        nodes = [
+            mock_node(
+                region=DcRegion.US_WEST_1,
+                num_cpus=NUM_CPUS_PER_NODE,
+                igpu=True,
+                dgpu=False,
+                containers=[
+                    mock_container(cpu_cpuset=[6], cpu_usage=99.93),
+                    mock_container(cpu_cpuset=[1], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[2], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[3], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[4], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[5], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[0], cpu_usage=12.33),
+                ],
+            ),
+            mock_node(
+                region=DcRegion.US_EAST_1,
+                num_cpus=NUM_CPUS_PER_NODE,
+                igpu=True,
+                dgpu=False,
+                containers=[
+                    mock_container(cpu_cpuset=[6], cpu_usage=99.93),
+                    mock_container(cpu_cpuset=[1], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[2], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[3], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[4], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[5], cpu_usage=12.33),
+                    mock_container(cpu_cpuset=[0], cpu_usage=12.33),
+                ],
+            ),
+        ]
+        pref_regions = [DcRegion.US_WEST_1, DcRegion.US_EAST_1]
+        reqs = NodeRequirements(dgpu=True, igpu=False)
+        patch_cluster_state(nodes, {nodes[0].id: {7}, nodes[1].id: {7}})
+        best_node = pick_best_node(pref_regions, reqs)
+        assert best_node == nodes[0] and best_node.free_cores() == {7}

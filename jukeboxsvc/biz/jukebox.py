@@ -99,12 +99,14 @@ def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optiona
     dgpu=false is requested, function should try to return nodes in this order:
         region=us-west-1,dgpu:false (best match)
         region=us-west-1,dgpu:true (no dgpu-less nodes available, have to waste resources of a valuable dgpu node)
-        region=eu-central-1,dgpu:false (no resources in a preferred region, found node in other regions)
+        DEPRECATED: region=eu-central-1,dgpu:false (no resources in a preferred region, found node in other regions)
         ...
 
     Args:
         regions:
-            List of regions ordered by a preference criteria (e.g. best latency).
+            DEPRECATED: List of regions ordered by a preference criteria (e.g. best latency).
+            Only the first region in the list is considered for node selection.
+            Caller (appsvc) ensures first region is always the DC with a best latency for a given customer
         reqs:
             Set of requirements for a node.
 
@@ -114,7 +116,7 @@ def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optiona
 
     # pylint: disable=pointless-string-statement
     """
-    TODO: getting JUKEBOX_CLUSTER.updated() is pretty heavy, up to 10 seconds to complete depending on the number of
+    TODO: getting JUKEBOX_CLUSTER.updated() is pretty heavy, up to 20 seconds to complete depending on the number of
     running containers in the cluster.
 
     log.info("getting nodes list started")
@@ -156,7 +158,7 @@ def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optiona
     cluster_state_quick = get_cluster_state_quick()
     for node in sorted_nodes:
         node_ = cluster_state_quick.get_node(node.id)
-        if node_ and cluster_state_quick.get_free_cores(node_.id):
+        if node_ and node_.region == DcRegion(regions[0]) and cluster_state_quick.get_free_cores(node_.id):
             return node
     return None
 
