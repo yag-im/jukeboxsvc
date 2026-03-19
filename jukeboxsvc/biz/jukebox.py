@@ -47,6 +47,7 @@ SCUMMVM_LOADING_DURATION = 0
 WINE_LOADING_DURATION = 0
 RETROARCH_PHILIPS_CD_I_LOADING_DURATION = 12
 RETROARCH_ZXS_LOADING_DURATION = 0
+RETROARCH_GENESIS_SLASH_MEGA_DRIVE_LOADING_DURATION = 0
 
 log = logging.getLogger("jukeboxsvc")
 
@@ -245,6 +246,8 @@ def get_runner_loading_duration(run_specs: RunContainerRequestDTO) -> int:
             return RETROARCH_PHILIPS_CD_I_LOADING_DURATION
         elif platform == "zxs":
             return RETROARCH_ZXS_LOADING_DURATION
+        elif platform == "genesis-slash-megadrive":
+            return RETROARCH_GENESIS_SLASH_MEGA_DRIVE_LOADING_DURATION
     return int(os.getenv("JUKEBOX_CONTAINER_STREAMD_LOADING_DURATION", "5"))
 
 
