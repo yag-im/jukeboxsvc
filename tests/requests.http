@@ -14,6 +14,9 @@ GET http://host.docker.internal:2375/v1.45/info
 GET http://localhost/cluster/state
 ###
 
+GET http://localhost/cluster/status
+###
+
 POST http://localhost/cluster/pull_image
 content-type: application/json
 

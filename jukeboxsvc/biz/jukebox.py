@@ -28,7 +28,10 @@ from jukeboxsvc.biz.errors import (
 )
 from jukeboxsvc.biz.misc import log_input_output
 from jukeboxsvc.biz.node import Node
-from jukeboxsvc.dto.cluster import PullContainerImageRequestDTO
+from jukeboxsvc.dto.cluster import (
+    ClusterStatusResponseDTO,
+    PullContainerImageRequestDTO,
+)
 from jukeboxsvc.dto.container import (
     DcRegion,
     ResumeContainerRequestDTO,
@@ -391,6 +394,24 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
 @log_input_output
 def cluster_state() -> Cluster:
     return JUKEBOX_CLUSTER.updated()
+
+
+def cluster_status() -> ClusterStatusResponseDTO:
+    """Returns cluster usage per region as a ratio of used cores to total cores."""
+    state = get_cluster_state_quick()
+    region_cpus: dict[str, int] = {}
+    region_used: dict[str, int] = {}
+    for node in state.nodes.values():
+        region_cpus[node.region] = region_cpus.get(node.region, 0) + node.cpus
+        region_used[node.region] = region_used.get(node.region, 0) + len(node.containers)
+    regions = [
+        ClusterStatusResponseDTO.RegionUsage(
+            region=region,
+            usage=region_used.get(region, 0) / cpus if cpus > 0 else 0.0,
+        )
+        for region, cpus in region_cpus.items()
+    ]
+    return ClusterStatusResponseDTO(regions=regions)
 
 
 def _pull_image_proc(image: PullContainerImageRequestDTO) -> None:
