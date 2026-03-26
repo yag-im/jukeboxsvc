@@ -54,7 +54,7 @@ class Cluster:
             with concurrent.futures.ThreadPoolExecutor(max_workers=STATE_UPDATE_MAX_WORKERS) as executor:
                 nodes = list(
                     executor.map(
-                        lambda ci: Node(ci.region, ci.api_uri),  # calls docker API
+                        lambda ci: Node(ci.region, ci.api_uri, collect_stats=False),  # calls docker API
                         self._nodes_conn_info,
                     )
                 )

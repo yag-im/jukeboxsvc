@@ -20,11 +20,11 @@ class Container:
     stats: t.Optional[ContainerStats] = None
     specs: ContainerRunSpecs
 
-    def __init__(self, c: DockerContainer) -> None:
+    def __init__(self, c: DockerContainer, collect_stats: bool = True) -> None:
         self.id = c.id
         self.status = c.status
         self.created = dateparser.parse(c.attrs["Created"])
-        if self.status == "running":
+        if collect_stats and self.status == "running":
             stats = c.stats(stream=False)
             self.stats = ContainerStats(
                 cpu_throttling_data=stats["cpu_stats"]["throttling_data"],

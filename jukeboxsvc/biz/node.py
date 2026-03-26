@@ -38,9 +38,10 @@ class Node:
     cpu_usage_total: float = 0
     memory_usage_total: float = 0
 
-    def __init__(self, region: DcRegion, api_uri: str) -> None:
+    def __init__(self, region: DcRegion, api_uri: str, collect_stats: bool = True) -> None:
         self.region = region
         self.api_uri = api_uri
+        self._collect_stats = collect_stats
         self._update()
 
     def __repr__(self) -> str:
@@ -150,14 +151,15 @@ class Node:
         for c in client.containers.list():
             if "jukebox_" in c.name:
                 try:
-                    self.containers[c.id] = Container(c)
+                    self.containers[c.id] = Container(c, collect_stats=self._collect_stats)
                 except JSONDecodeError as e:
                     # this happens quite often due to a delayed sync between local and remote states
                     # (e.g. for non-existing container)
                     log.error("error while getting stats from container %s: %s", c.id, e)
-        for c in list(v for v in self.containers.values() if v.status == "running"):
-            self.cpu_usage_total += c.stats.cpu_usage_perc  # type: ignore[union-attr]
-            self.memory_usage_total += c.stats.memory_usage_perc  # type: ignore[union-attr]
+        if self._collect_stats:
+            for c in list(v for v in self.containers.values() if v.status == "running"):
+                self.cpu_usage_total += c.stats.cpu_usage_perc  # type: ignore[union-attr]
+                self.memory_usage_total += c.stats.memory_usage_perc  # type: ignore[union-attr]
 
         self.attrs = NodeAttrs(
             igpu=True,  # TODO: fetch from node
