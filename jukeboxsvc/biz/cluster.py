@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 
 # from jukeboxsvc.biz.misc import log_input_output
@@ -28,14 +29,19 @@ class NodeConnInfo:
     region: str
 
 
+STATE_UPDATE_MIN_INTERVAL = 5  # seconds, debounce interval for update()
+
+
 class Cluster:
     _nodes: dict[str, Node]
     _nodes_conn_info: list[NodeConnInfo]  # this comes from the local resource
     _lock = threading.Lock()
+    _update_lock = threading.Lock()
+    _last_update: float = 0.0
 
     def __init__(self, cluster_nodes: str) -> None:
         self._nodes_conn_info = [NodeConnInfo(**ci) for ci in json.loads(cluster_nodes)]
-        self.update()  # the very first update is synchronous
+        self.update(force=True)  # the very first update is synchronous
         # TODO: do we need to update state periodically?
         # upd_thread = threading.Timer(interval=STATE_UPDATE_PERIOD, function=self.update)
         # upd_thread.daemon = True  # daemonizing is required so pytest doesn't hang on exit
@@ -47,27 +53,41 @@ class Cluster:
             return copy.deepcopy(self._nodes)
 
     # @log_input_output
-    def update(self) -> None:
-        """Updates current state of the cluster."""
+    def update(self, force: bool = False) -> None:
+        """Updates current state of the cluster, debounced to avoid redundant work."""
+
+        if not force and time.monotonic() - self._last_update < STATE_UPDATE_MIN_INTERVAL:
+            return
+
+        if not self._update_lock.acquire(blocking=force):
+            return  # another thread is already updating
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=STATE_UPDATE_MAX_WORKERS) as executor:
+            if not force and time.monotonic() - self._last_update < STATE_UPDATE_MIN_INTERVAL:
+                return  # refreshed by the thread that held the lock before us
+
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=STATE_UPDATE_MAX_WORKERS, thread_name_prefix="cluster-update"
+            ) as executor:
                 nodes = list(
                     executor.map(
                         lambda ci: Node(ci.region, ci.api_uri, collect_stats=False),  # calls docker API
                         self._nodes_conn_info,
                     )
                 )
-                if len(nodes) != len(self._nodes_conn_info):
-                    log.error(
-                        "cluster state updating error, expected %d nodes, got: %d nodes.",
-                        len(self._nodes_conn_info),
-                        len(nodes),
-                    )
+            if len(nodes) != len(self._nodes_conn_info):
+                log.error(
+                    "cluster state updating error, expected %d nodes, got: %d nodes.",
+                    len(self._nodes_conn_info),
+                    len(nodes),
+                )
             with self._lock:
                 self._nodes = {n.id: n for n in nodes}
+            self._last_update = time.monotonic()
         except Exception as e:  # pylint: disable=broad-exception-caught
             log.error(e, exc_info=True)
+        finally:
+            self._update_lock.release()
 
     def updated(self) -> "Cluster":
         self.update()
