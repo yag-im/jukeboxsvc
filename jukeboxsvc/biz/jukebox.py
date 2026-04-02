@@ -207,15 +207,16 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
     cmd = f"/opt/yag/appstor/clone_app.sh {run_specs.user_id} {run_specs.app_descr.slug} \
         {run_specs.app_descr.get_app_path_release_uuid()}"
     try:
-        clone_res = Connection(
+        with Connection(
             host=appstor_instance["host"],
             user=appstor_user,
             port=appstor_instance["ssh_port"],
             connect_kwargs={"key_filename": "/opt/yag/jukeboxsvc/.ssh/id_ed25519"},
-        ).run(
-            cmd,
-            hide=True,
-        )
+        ) as conn:
+            clone_res = conn.run(
+                cmd,
+                hide=True,
+            )
         log.info("clone_app result: %s", clone_res)
     except UnexpectedExit as e:
         raise JukeboxOpException(
