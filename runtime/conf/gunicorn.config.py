@@ -16,8 +16,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from jukeboxsvc.biz.thread_tracer import install as install_thread_tracer
-
 OTEL_COLLECTOR_HOST = os.environ.get("OTEL_COLLECTOR_HOST")
 OTEL_COLLECTOR_PORT = os.environ.get("OTEL_COLLECTOR_PORT")
 OTEL_SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME")
@@ -27,8 +25,6 @@ OTEL_TRACE_ENABLED = os.environ.get("OTEL_TRACE_ENABLED", "false").lower() == "t
 
 
 def post_fork(server: Arbiter, worker: ThreadWorker) -> None:
-    install_thread_tracer()
-
     if not OTEL_TRACE_ENABLED:
         return
 
