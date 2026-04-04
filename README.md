@@ -1,6 +1,6 @@
 # jukeboxsvc
 
-Service governing *jukebox* clusters.
+Service governing *jukebox* cluster.
 
 ## Development
 
@@ -27,6 +27,7 @@ This volume will be mounted inside the jukebox docker container on the app start
 Create *.devcontainer/secrets.env* file:
 
     SIGNALER_AUTH_TOKEN=***VALUE***
+    SQLDB_PASSWORD=***VALUE***
 
 Make sure:
 
@@ -34,7 +35,10 @@ Make sure:
     IGPU_RENDER_DEVICE_ID
 
 in `.devcontainer/.env` contain proper values.
+TODO: automate videocard detection and selection on the jukebox node.
 
-TODO: automate card detection and selection on the jukebox node.
+The following devcontainers should be up and running:
+
+    sqldb
 
 Then simply open this project in any IDE that supports devcontainers (VSCode is recommended).

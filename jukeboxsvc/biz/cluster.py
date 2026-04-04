@@ -1,6 +1,5 @@
 import concurrent.futures
 import copy
-import json
 import logging
 import os
 import threading
@@ -8,22 +7,21 @@ import time
 from dataclasses import dataclass
 
 # from jukeboxsvc.biz.misc import log_input_output
+from jukeboxsvc.biz.models import JukeboxNodeDAO
 from jukeboxsvc.biz.node import Node
 from jukeboxsvc.services.dto.sessionsvc import GetSessionsResponseDTO
 from jukeboxsvc.services.sessionsvc import get_sessions
 
 STATE_UPDATE_MAX_WORKERS = 50
 STATE_UPDATE_PERIOD = 60
-
-JUKEBOX_NODES = os.environ["JUKEBOX_NODES"]
-
+DOCKER_API_PORT = int(os.environ.get("DOCKER_API_PORT", "2375"))
 
 log = logging.getLogger("jukeboxsvc")
 
 
 @dataclass
 class NodeConnInfo:
-    """Node connection info (from a local storage)."""
+    """Node connection info."""
 
     api_uri: str
     region: str
@@ -34,18 +32,12 @@ STATE_UPDATE_MIN_INTERVAL = 5  # seconds, debounce interval for update()
 
 class Cluster:
     _nodes: dict[str, Node]
-    _nodes_conn_info: list[NodeConnInfo]  # this comes from the local resource
     _lock = threading.Lock()
     _update_lock = threading.Lock()
     _last_update: float = 0.0
 
-    def __init__(self, cluster_nodes: str) -> None:
-        self._nodes_conn_info = [NodeConnInfo(**ci) for ci in json.loads(cluster_nodes)]
-        self.update(force=True)  # the very first update is synchronous
-        # TODO: do we need to update state periodically?
-        # upd_thread = threading.Timer(interval=STATE_UPDATE_PERIOD, function=self.update)
-        # upd_thread.daemon = True  # daemonizing is required so pytest doesn't hang on exit
-        # upd_thread.start()
+    def __init__(self) -> None:
+        self._nodes = {}
 
     @property
     def nodes(self) -> dict[str, Node]:
@@ -66,19 +58,27 @@ class Cluster:
             if not force and time.monotonic() - self._last_update < STATE_UPDATE_MIN_INTERVAL:
                 return  # refreshed by the thread that held the lock before us
 
+            nodes_conn_info = [
+                NodeConnInfo(
+                    api_uri=f"http://{row.private_ip}:{DOCKER_API_PORT}",
+                    region=row.region,
+                )
+                for row in JukeboxNodeDAO.query.all()
+            ]
+
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=STATE_UPDATE_MAX_WORKERS, thread_name_prefix="cluster-update"
             ) as executor:
                 nodes = list(
                     executor.map(
                         lambda ci: Node(ci.region, ci.api_uri, collect_stats=False),  # calls docker API
-                        self._nodes_conn_info,
+                        nodes_conn_info,
                     )
                 )
-            if len(nodes) != len(self._nodes_conn_info):
+            if len(nodes) != len(nodes_conn_info):
                 log.error(
                     "cluster state updating error, expected %d nodes, got: %d nodes.",
-                    len(self._nodes_conn_info),
+                    len(nodes_conn_info),
                     len(nodes),
                 )
             with self._lock:
@@ -147,4 +147,4 @@ def get_cluster_state_quick() -> ClusterStateLight:
     return cluster
 
 
-JUKEBOX_CLUSTER = Cluster(JUKEBOX_NODES)
+JUKEBOX_CLUSTER = Cluster()

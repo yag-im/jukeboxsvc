@@ -392,7 +392,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     return RunContainerResponseDTO.Schema().load(run_container_res)
 
 
-@log_input_output
+# @log_input_output
 def cluster_state() -> Cluster:
     return JUKEBOX_CLUSTER.updated()
 
