@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    TIMESTAMP,
     BigInteger,
     Column,
     String,
@@ -17,5 +18,4 @@ class JukeboxNodeDAO(sqldb.Model):
     region = Column(String, nullable=False)
     node_type = Column(String, nullable=False)
     flavor = Column(String, nullable=False)
-    dgpu = Column(String, nullable=True)
-    igpu = Column(String, nullable=True)
+    created_ts = Column(TIMESTAMP, nullable=False)
