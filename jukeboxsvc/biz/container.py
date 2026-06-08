@@ -22,25 +22,25 @@ class ContainerRunSpecs(BaseModel):
 
     class EnvVars(BaseModel):
         # pylint: disable=invalid-name
-        COLOR_BITS: int
-        FPS: int
-        LOADING_DURATION: int
-        MAX_INACTIVITY_DURATION: int
-        RUN_MIDI_SYNTH: str
-        SIGNALER_AUTH_TOKEN: str
-        SIGNALER_HOST: str
-        SIGNALER_URI: str
-        SCREEN_HEIGHT: int
-        SCREEN_WIDTH: int
-        STUN_URI: str
-        WS_CONN_ID: str
-        WS_CONSUMER_ID: str
+        COLOR_BITS: int | None = None
+        FPS: int | None = None
+        LOADING_DURATION: int | None = None
+        MAX_INACTIVITY_DURATION: int | None = None
+        RUN_MIDI_SYNTH: str | None = None
+        SIGNALER_AUTH_TOKEN: str | None = None
+        SIGNALER_HOST: str | None = None
+        SIGNALER_URI: str | None = None
+        SCREEN_HEIGHT: int | None = None
+        SCREEN_WIDTH: int | None = None
+        STUN_URI: str | None = None
+        WS_CONN_ID: str | None = None
+        WS_CONSUMER_ID: str | None = None
         # optional vars
-        GST_DEBUG: t.Optional[str] = None
+        GST_DEBUG: str | None = None
         # x11-specific vars
-        DISPLAY: t.Optional[str] = None
-        SHOW_POINTER: t.Optional[bool] = None
-        NVIDIA_DRIVER_CAPABILITIES: t.Optional[str] = None
+        DISPLAY: str | None = None
+        SHOW_POINTER: bool | None = None
+        NVIDIA_DRIVER_CAPABILITIES: str | None = None
 
     class Labels(BaseModel):
         model_config = ConfigDict(extra="ignore")
