@@ -1,114 +1,70 @@
-import datetime
 import typing as t
-from dataclasses import fields
+from datetime import datetime
 
-from marshmallow import Schema
-from marshmallow_dataclass import dataclass
+from pydantic import BaseModel
 
-
-@dataclass
-class NodeAttrs:
-    """Node attributes (from client.info())."""
-
-    igpu: bool  # is integrated GPU present
-    dgpu: bool  # is dedicated GPU present
-    cpus: int  # number of logical cores
-    total_memory: int  # total memory in bytes
+from jukeboxsvc.biz.container import (  # noqa: F401
+    Container,
+    ContainerRunSpecs,
+    ContainerStats,
+)
+from jukeboxsvc.biz.node import Node
 
 
-@dataclass
-class ContainerRunSpecs:
-    @dataclass
-    class Attrs:
-        cpuset_cpus: list[int]
-        image_tag: str
-        memory_limit: int  # memory required by app (in bytes, includes runners' reqs)
-        memory_shared: t.Optional[int]  # shared memory required (if any)
-        name: str
-        nanocpus_limit: int  # nanocpus required by app (includes runners' reqs)
-
-    @dataclass
-    class EnvVars:
-        # pylint: disable=invalid-name
-        COLOR_BITS: int
-        FPS: int
-        LOADING_DURATION: int
-        MAX_INACTIVITY_DURATION: int
-        RUN_MIDI_SYNTH: str
-        SIGNALER_AUTH_TOKEN: str
-        SIGNALER_HOST: str
-        SIGNALER_URI: str
-        SCREEN_HEIGHT: int
-        SCREEN_WIDTH: int
-        STUN_URI: str
-        WS_CONN_ID: str
-        WS_CONSUMER_ID: str
-        # optional vars
-        GST_DEBUG: t.Optional[str] = None
-        # x11-specific vars
-        DISPLAY: t.Optional[str] = None
-        SHOW_POINTER: t.Optional[bool] = None
-        NVIDIA_DRIVER_CAPABILITIES: t.Optional[str] = None
-
-    @dataclass
-    class Labels:
-        app_release_uuid: str
-        app_slug: str
-        user_id: str
-
-        def __init__(self, **kwargs: t.Any) -> None:
-            # ignoring here extra container labels, e.g. org.opencontainer.image.created
-            for field in fields(self):
-                if field.name in kwargs:
-                    setattr(self, field.name, kwargs[field.name])
-
-    attrs: Attrs
-    env_vars: EnvVars
-    labels: Labels
-
-
-@dataclass
-class ContainerStats:
-    cpu_throttling_data: dict[str, int]
-    cpu_usage_perc: float
-    memory_usage_perc: float
-
-
-@dataclass
-class ClusterStateResponseDTO:
-    @dataclass
-    class Node:
-        @dataclass
-        class Container:
-            created: datetime.datetime
-            id: str
-            specs: ContainerRunSpecs
-            stats: t.Optional[ContainerStats]  # e.g. not avail for a paused container
-            status: str
-
-        attrs: NodeAttrs
-        api_uri: str
-        containers: dict[str, Container]
-        id: str
-        region: str
-
-    nodes: dict[str, Node]
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
-
-
-@dataclass
-class ClusterStatusResponseDTO:
-    @dataclass
-    class RegionUsage:
+class ClusterUsageResponseDTO(BaseModel):
+    class RegionUsage(BaseModel):
         region: str
         usage: float
 
     regions: list[RegionUsage]
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
 
-@dataclass
-class PullContainerImageRequestDTO:
+class ContainerDTO(BaseModel):
+    id: str
+    status: str
+    specs: ContainerRunSpecs
+    created: t.Optional[datetime] = None
+    stats: t.Optional[ContainerStats] = None
+
+    @classmethod
+    def from_container(cls, c: Container) -> "ContainerDTO":
+        return cls(
+            id=c.id,
+            status=c.status,
+            specs=c.specs,
+            created=getattr(c, "created", None),
+            stats=getattr(c, "stats", None),
+        )
+
+
+class NodeDTO(BaseModel):
+    id: str
+    region: str
+    flavor: str
+    hw_specs: Node.NodeHwSpecs
+    created_ts: datetime
+    cpu_usage_total: float
+    memory_usage_total: float
+    containers: list[ContainerDTO]
+
+    @classmethod
+    def from_node(cls, n: Node) -> "NodeDTO":
+        return cls(
+            id=n.id,
+            region=str(n.region),
+            flavor=str(n.flavor),
+            hw_specs=n.hw_specs,
+            created_ts=n.created_ts,
+            cpu_usage_total=n.cpu_usage_total,
+            memory_usage_total=n.memory_usage_total,
+            containers=[ContainerDTO.from_container(c) for c in n.containers.values()],
+        )
+
+
+class ClusterStateResponseDTO(BaseModel):
+    nodes: list[NodeDTO]
+
+
+class PullContainerImageRequestDTO(BaseModel):
     repository: str
     tag: str
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name

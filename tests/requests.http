@@ -1,3 +1,6 @@
+# API doc
+GET http://localhost/openapi.json
+
 # check connectivity with a jukebox cluster
 
 GET http://host.docker.internal:12375/v1.45/images/json
@@ -50,8 +53,7 @@ content-type: application/json
             "video_enc": "cpu"
         },
         "hw": {
-            "dgpu": false,
-            "igpu": true,
+            "gpu": "intel-uhd-p620",
             "memory": 1048576000,
             "memory_shared": null,
             "nanocpus": 1000000000
@@ -81,4 +83,21 @@ content-type: application/json
 ###
 
 POST http://localhost/nodes/3KXM:A6UU:LLYL:UYPH:ZWH2:AJ37:G5UL:2UZC:653T:BFLZ:R5OD:DOSR/containers/fafd7a263229dca419e68dd4cd84ad4655a3ca96547aa58299afee07226ef8c4/stop
+###
+
+GET http://localhost/ovh/cluster/nodes
+###
+
+POST http://localhost/ovh/cluster/nodes/create
+content-type: application/json
+
+{
+    "flavor": "d2-2",
+    "image": "Debian 13",
+    "name": "jukebox-instance-xf45dwe",
+    "region": "us-east-1"
+}
+###
+
+POST http://localhost/ovh/cluster/nodes/8b872c56-53f9-4a82-bc1d-c0b3fb02f3fb/delete
 ###

@@ -1,150 +1,68 @@
-import concurrent.futures
-import copy
+import asyncio
 import logging
 import os
-import threading
-import time
-from dataclasses import dataclass
 
-# from jukeboxsvc.biz.misc import log_input_output
+from jukeboxsvc.biz.container import Container
 from jukeboxsvc.biz.models import JukeboxNodeDAO
 from jukeboxsvc.biz.node import Node
-from jukeboxsvc.services.dto.sessionsvc import GetSessionsResponseDTO
+from jukeboxsvc.dto.container import DcRegion
+from jukeboxsvc.services.dto.sessionsvc import (
+    GetSessionsResponseDTO,
+    SessionDC,
+)
 from jukeboxsvc.services.sessionsvc import get_sessions
 
-STATE_UPDATE_MAX_WORKERS = 50
 STATE_UPDATE_PERIOD = 60
 DOCKER_API_PORT = int(os.environ.get("DOCKER_API_PORT", "2375"))
 
 log = logging.getLogger("jukeboxsvc")
 
 
-@dataclass
-class NodeConnInfo:
-    """Node connection info."""
-
-    api_uri: str
-    region: str
-
-
-STATE_UPDATE_MIN_INTERVAL = 5  # seconds, debounce interval for update()
-
-
-class Cluster:
-    _nodes: dict[str, Node]
-    _lock = threading.Lock()
-    _update_lock = threading.Lock()
-    _last_update: float = 0.0
-
-    def __init__(self) -> None:
-        self._nodes = {}
-
-    @property
-    def nodes(self) -> dict[str, Node]:
-        with self._lock:
-            return copy.deepcopy(self._nodes)
-
-    # @log_input_output
-    def update(self, force: bool = False) -> None:
-        """Updates current state of the cluster, debounced to avoid redundant work."""
-
-        if not force and time.monotonic() - self._last_update < STATE_UPDATE_MIN_INTERVAL:
-            return
-
-        if not self._update_lock.acquire(blocking=force):
-            return  # another thread is already updating
-
-        try:
-            if not force and time.monotonic() - self._last_update < STATE_UPDATE_MIN_INTERVAL:
-                return  # refreshed by the thread that held the lock before us
-
-            nodes_conn_info = [
-                NodeConnInfo(
-                    api_uri=f"http://{row.private_ip}:{DOCKER_API_PORT}",
-                    region=row.region,
-                )
-                for row in JukeboxNodeDAO.query.all()
-            ]
-
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=STATE_UPDATE_MAX_WORKERS, thread_name_prefix="cluster-update"
-            ) as executor:
-                nodes = list(
-                    executor.map(
-                        lambda ci: Node(ci.region, ci.api_uri, collect_stats=False),  # calls docker API
-                        nodes_conn_info,
-                    )
-                )
-            if len(nodes) != len(nodes_conn_info):
-                log.error(
-                    "cluster state updating error, expected %d nodes, got: %d nodes.",
-                    len(nodes_conn_info),
-                    len(nodes),
-                )
-            with self._lock:
-                self._nodes = {n.id: n for n in nodes}
-            self._last_update = time.monotonic()
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            log.error(e, exc_info=True)
-        finally:
-            self._update_lock.release()
-
-    def updated(self) -> "Cluster":
-        self.update()
-        return self
+def get_nodes(
+    region: DcRegion | None = None, init_containers_from_sessions: bool = False, do_update: bool = False
+) -> list[Node]:
+    if region is not None:
+        rows = JukeboxNodeDAO.query.filter_by(region=region.value).all()
+    else:
+        rows = JukeboxNodeDAO.query.all()
+    if do_update:
+        raise RuntimeError("use get_nodes_update() for do_update=True")
+    elif init_containers_from_sessions:
+        sessions: GetSessionsResponseDTO = get_sessions()
+        sessions_by_node_id: dict[str, list[SessionDC]] = {}
+        for s in sessions.sessions:
+            if s.container is None:
+                continue  # session created but not started yet, so no container assigned
+            sessions_by_node_id.setdefault(s.container.node_id, []).append(s)
+        nodes = []
+        for row in rows:
+            node = Node.from_jukebox_node_dao(row, do_update=do_update)
+            node_sessions = sessions_by_node_id.get(node.id, [])
+            node.containers = {
+                s.container.id: Container.from_sessiondc(s) for s in node_sessions if s.container is not None
+            }
+            nodes.append(node)
+    else:
+        nodes = [Node.from_jukebox_node_dao(row, do_update=do_update) for row in rows]
+    return nodes
 
 
-@dataclass
-class ClusterStateLight:
-    @dataclass
-    class Node:
-        @dataclass
-        class Container:
-            id: str
-            node_id: str
-            cpuset_cpus: set[int]
-
-        id: str
-        region: str
-        containers: list[Container]
-        cpus: int
-
-    nodes: dict[str, Node]
-
-    def get_free_cores(self, node_id: str) -> set[int]:
-        node = self.nodes.get(node_id)
-        if not node:
-            raise ValueError(f"node with id {node_id} not found in the cluster")
-        used_cores = set()
-        for c in node.containers:
-            used_cores.update(c.cpuset_cpus)
-        return set(range(node.cpus)) - used_cores
-
-    def get_node(self, node_id: str) -> Node | None:
-        return self.nodes.get(node_id)
+async def get_nodes_update(region: DcRegion | None = None) -> list[Node]:
+    if region is not None:
+        rows = JukeboxNodeDAO.query.filter_by(region=region.value).all()
+    else:
+        rows = JukeboxNodeDAO.query.all()
+    return list(await asyncio.gather(*[asyncio.to_thread(Node.from_jukebox_node_dao, row, True) for row in rows]))
 
 
-def get_cluster_state_quick() -> ClusterStateLight:
-    """
-    Quick and dirty way to get nodes state (cpu and memory usage) by parsing sessions list. This is required for better
-    scheduling decisions. The alternative way is to call each node for its state (JUKEBOX_CLUSTER.updated()), but it is
-    pretty heavy and time consuming, especially when the number of containers running is large.
-    """
-    cluster = ClusterStateLight(nodes={})
-    for n in JUKEBOX_CLUSTER.nodes.values():
-        cluster.nodes[n.id] = ClusterStateLight.Node(id=n.id, containers=[], cpus=n.attrs.cpus, region=n.region)
-
-    sessions: GetSessionsResponseDTO = get_sessions()
-    for s in sessions.sessions:
-        if s.container is None:
-            continue  # session created but not started yet, so no container assigned
-        node_id = s.container.node_id
-        node = cluster.nodes.get(node_id)
-        if node is None:
-            log.error("session %s has container assigned to node %s, but no such node in the cluster", s.id, node_id)
-            continue
-        node.containers.append(ClusterStateLight.Node.Container(s.container.id, node_id, set(s.container.cpuset_cpus)))
-    return cluster
-
-
-JUKEBOX_CLUSTER = Cluster()
+def get_node(node_id: str, init_containers_from_sessions: bool = False, do_update: bool = False) -> Node | None:
+    row = JukeboxNodeDAO.query.filter_by(uuid=node_id).first()
+    if row is None:
+        return None
+    node = Node.from_jukebox_node_dao(row, do_update=do_update)
+    if not do_update and init_containers_from_sessions:
+        sessions: GetSessionsResponseDTO = get_sessions(node_id=node_id)
+        node.containers = {
+            s.container.id: Container.from_sessiondc(s) for s in sessions.sessions if s.container is not None
+        }
+    return node

@@ -3,17 +3,18 @@ import logging
 import typing as t
 
 from docker.errors import APIError
-from flask import (
-    Flask,
-    Response,
+from fastapi import (
+    FastAPI,
+    Request,
 )
-from marshmallow import ValidationError
-from werkzeug.exceptions import HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 ERROR_CONTAINER_NOT_FOUND = (1404, "container not found")
 ERROR_JUKEBOX_OP = (1409, "jukebox operational error")
 ERROR_NODE_NOT_FOUND = (1404, "node not found")
 ERROR_CLUSTER_OUT_OF_RESOURCES = (1429, "no resources available in the cluster")
+ERROR_CLOUD_INSTANCE_BUILD_IN_PROGRESS = (1409, "a cloud instance is already being built")
 ERROR_UNKNOWN = (1500, "unknown error")
 
 log = logging.getLogger("jukeboxsvc")
@@ -54,49 +55,33 @@ class ClusterOutOfResourcesException(BizException):
         super().__init__(code, message)
 
 
-def init_app(app: Flask) -> None:
-    """Inits error handlers.
-
-    Make sure FLASK_PROPAGATE_EXCEPTIONS is set to `true`, otherwise errorhandlers will be unreachable.
-    """
-
-    @app.errorhandler(Exception)
-    def handle_exception(e: Exception) -> Response:
-        if isinstance(e, HTTPException):
-            return e
-        res = json.dumps({"code": ERROR_UNKNOWN[0], "message": ERROR_UNKNOWN[1]})
+def init_app(app: FastAPI) -> None:
+    @app.exception_handler(Exception)
+    async def handle_exception(request: Request, e: Exception) -> JSONResponse:  # pylint: disable=unused-argument
+        res = {"code": ERROR_UNKNOWN[0], "message": ERROR_UNKNOWN[1]}
         log.exception(e)
-        return Response(res, mimetype="application/json", status=500)
+        return JSONResponse(content=res, status_code=500)
 
-    @app.errorhandler(APIError)  # docker api errors
-    def handle_api_error(e: APIError) -> Response:
-        res = json.dumps(
-            {
-                "code": 1500,
-                "message": e.explanation,
-            }
-        )
-        log.error(res)
-        return Response(res, mimetype="application/json", status=400)
+    @app.exception_handler(APIError)
+    async def handle_api_error(request: Request, e: APIError) -> JSONResponse:  # pylint: disable=unused-argument
+        res = {"code": 1500, "message": e.explanation}
+        log.error(json.dumps(res))
+        return JSONResponse(content=res, status_code=400)
 
-    @app.errorhandler(ValidationError)
-    def handle_validation_error(e: ValidationError) -> Response:
-        res = json.dumps(
-            {
-                "code": 1400,
-                "message": e.messages,
-            }
-        )
-        log.error(res)
-        return Response(res, mimetype="application/json", status=400)
+    @app.exception_handler(ValidationError)
+    async def handle_validation_error(
+        request: Request,  # pylint: disable=unused-argument
+        e: ValidationError,
+    ) -> JSONResponse:
+        res = {"code": 1400, "message": e.errors()}
+        log.error(json.dumps(res))
+        return JSONResponse(content=res, status_code=400)
 
-    @app.errorhandler(BizException)
-    def handle_biz_exception(e: BizException) -> Response:
-        res = json.dumps(
-            {
-                "code": e.code,
-                "message": e.message,
-            }
-        )
-        log.error(res)
-        return Response(res, mimetype="application/json", status=409)
+    @app.exception_handler(BizException)
+    async def handle_biz_exception(
+        request: Request,  # pylint: disable=unused-argument
+        e: BizException,
+    ) -> JSONResponse:
+        res = {"code": e.code, "message": e.message}
+        log.error(json.dumps(res))
+        return JSONResponse(content=res, status_code=409)

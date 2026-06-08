@@ -2,23 +2,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Flask",
+            "name": "Python: uvicorn",
             "type": "debugpy",
             "request": "launch",
-            "module": "flask",
+            "module": "uvicorn",
             "envFile": "${workspaceFolder}/.devcontainer/.env",
-            "env": {
-                "FLASK_APP": "jukeboxsvc",
-                "FLASK_DEBUG": "True",
-                "FLASK_RUN_PORT": "${env:LISTEN_PORT}",
-                "FLASK_RUN_HOST": "${env:LISTEN_IP}"
-            },
             "args": [
-                "run",
-                "--no-debugger",
-                "--no-reload"
+                "jukeboxsvc:create_app",
+                "--factory",
+                "--host",
+                "${env:LISTEN_IP}",
+                "--port",
+                "${env:LISTEN_PORT}",
+                "--reload"
             ],
-            "jinja": true,
             "justMyCode": false
         },
         {
@@ -30,10 +27,10 @@
             "args": [
                 "--bind",
                 "${env:LISTEN_IP}:${env:LISTEN_PORT}",
+                "--worker-class",
+                "uvicorn.workers.UvicornWorker",
                 "--workers",
                 "${env:GUNICORN_NUM_WORKERS}",
-                "--threads",
-                "${env:GUNICORN_NUM_THREADS}",
                 "--timeout",
                 "${env:GUNICORN_TIMEOUT}",
                 "-c",

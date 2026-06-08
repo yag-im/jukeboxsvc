@@ -31,8 +31,8 @@ Create *.devcontainer/secrets.env* file:
 
 Make sure:
 
-    IGPU_CARD_ID
-    IGPU_RENDER_DEVICE_ID
+    GPU_CARD_ID
+    GPU_RENDER_DEVICE_ID
 
 in `.devcontainer/.env` contain proper values.
 TODO: automate videocard detection and selection on the jukebox node.

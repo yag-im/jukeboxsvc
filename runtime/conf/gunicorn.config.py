@@ -2,7 +2,6 @@ import logging
 import os
 
 from gunicorn.arbiter import Arbiter
-from gunicorn.workers.gthread import ThreadWorker
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
@@ -15,6 +14,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from uvicorn.workers import UvicornWorker
 
 OTEL_COLLECTOR_HOST = os.environ.get("OTEL_COLLECTOR_HOST")
 OTEL_COLLECTOR_PORT = os.environ.get("OTEL_COLLECTOR_PORT")
@@ -24,7 +24,7 @@ OTEL_SERVICE_INSTANCE_ID = os.environ.get("OTEL_SERVICE_INSTANCE_ID")
 OTEL_TRACE_ENABLED = os.environ.get("OTEL_TRACE_ENABLED", "false").lower() == "true"
 
 
-def post_fork(server: Arbiter, worker: ThreadWorker) -> None:
+def post_fork(server: Arbiter, worker: UvicornWorker) -> None:
     if not OTEL_TRACE_ENABLED:
         return
 

@@ -1,24 +1,11 @@
-from flask_restful import Api
+from fastapi import APIRouter
 
-from jukeboxsvc.api.cluster import (
-    ClusterPullImage,
-    ClusterState,
-    ClusterStatus,
-)
-from jukeboxsvc.api.container import (
-    ContainerPause,
-    ContainerResume,
-    ContainerRun,
-    ContainerStop,
-)
+from jukeboxsvc.api.cluster import router as cluster_router
+from jukeboxsvc.api.container import router as container_router
+from jukeboxsvc.api.ovh_cluster import router as ovh_cluster_router
 
-api = Api()
+router = APIRouter()
 
-# setup routing
-api.add_resource(ContainerPause, "/nodes/<string:node_id>/containers/<string:container_id>/pause")  # POST
-api.add_resource(ContainerRun, "/containers/run")  # POST
-api.add_resource(ContainerStop, "/nodes/<string:node_id>/containers/<string:container_id>/stop")  # POST
-api.add_resource(ContainerResume, "/nodes/<string:node_id>/containers/<string:container_id>/resume")  # POST
-api.add_resource(ClusterState, "/cluster/state")  # GET
-api.add_resource(ClusterStatus, "/cluster/status")  # GET
-api.add_resource(ClusterPullImage, "/cluster/pull_image")  # POST
+router.include_router(container_router)
+router.include_router(cluster_router)
+router.include_router(ovh_cluster_router)

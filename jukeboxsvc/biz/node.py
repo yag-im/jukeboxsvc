@@ -1,6 +1,7 @@
-import dataclasses
 import logging
+import os
 import typing as t
+from datetime import datetime
 
 import docker
 from docker.errors import (
@@ -10,6 +11,7 @@ from docker.errors import (
 from docker.models.containers import Container as DockerContainer
 from docker.models.images import Image
 from docker.types import Mount
+from pydantic import BaseModel
 from requests import JSONDecodeError
 
 from jukeboxsvc.biz.container import (
@@ -21,7 +23,15 @@ from jukeboxsvc.biz.misc import (
     get_cluster_client,
     log_input_output,
 )
-from jukeboxsvc.dto.cluster import NodeAttrs
+from jukeboxsvc.biz.models import JukeboxNodeDAO
+from jukeboxsvc.biz.ovh_defs import (
+    CPUS_BY_FLAVOR,
+    GPUS_BY_FLAVOR,
+    MEMORY_BY_FLAVOR,
+    GpuModel,
+    OvhNodeFlavor,
+    OvhNodeType,
+)
 from jukeboxsvc.dto.container import DcRegion
 
 STOP_CONTAINER_GRACEFULL_TIMEOUT = 5
@@ -30,27 +40,69 @@ log = logging.getLogger("jukeboxsvc")
 
 
 class Node:
-    api_uri: str
-    attrs: NodeAttrs
+    class NodeHwSpecs(BaseModel):
+        """Node hardware specs"""
+
+        gpus: list[GpuModel]
+        cpus: int  # number of logical cores
+        total_memory: int  # total memory in bytes
+
+    id: str  # OVH UUID
+    docker_api_uri: str
+    hw_specs: NodeHwSpecs
     containers: dict[str, Container]
-    id: str
+    flavor: OvhNodeFlavor
     region: DcRegion
+    created_ts: datetime
+
     cpu_usage_total: float = 0
     memory_usage_total: float = 0
+    _collect_stats: bool = False
 
-    def __init__(self, region: DcRegion, api_uri: str, collect_stats: bool = True) -> None:
+    def __init__(
+        self,
+        region: DcRegion,
+        docker_api_uri: str,
+        flavor: OvhNodeFlavor,
+        node_id: str,
+        created_ts: datetime,
+        do_update: bool = False,
+    ) -> None:
         self.region = region
-        self.api_uri = api_uri
-        self._collect_stats = collect_stats
-        self._update()
+        self.docker_api_uri = docker_api_uri
+        self.flavor = flavor
+        self.id = node_id
+        self.created_ts = created_ts
+        self.hw_specs = Node.NodeHwSpecs(
+            gpus=GPUS_BY_FLAVOR.get(OvhNodeFlavor(self.flavor), []),
+            cpus=CPUS_BY_FLAVOR[OvhNodeFlavor(self.flavor)],
+            total_memory=MEMORY_BY_FLAVOR[OvhNodeFlavor(self.flavor)],
+        )
+        self._client = get_cluster_client(self.docker_api_uri, timeout=55)
+        if do_update:
+            self._update()
+
+    @classmethod
+    def from_jukebox_node_dao(cls, dao: JukeboxNodeDAO, do_update: bool = False) -> "Node":
+        docker_api_port = int(os.environ.get("DOCKER_API_PORT", "2375"))
+        flavor = OvhNodeFlavor(dao.flavor.upper() if dao.node_type == OvhNodeType.DEDICATED.value else dao.flavor)
+        node = cls(
+            region=DcRegion(dao.region),
+            docker_api_uri=f"http://{dao.private_ip}:{docker_api_port}",
+            flavor=flavor,
+            node_id=dao.uuid,
+            created_ts=dao.created_ts,
+        )
+        if do_update:
+            node._update()
+        return node
 
     def __repr__(self) -> str:
         container_ids = list(self.containers.keys()) if hasattr(self, "containers") else []
         return (
-            f"Node(id={getattr(self, 'id', None)}, region={self.region}, "
+            f"Node(docker_api_uri={getattr(self, 'docker_api_uri', None)}, region={self.region}, "
             f"containers={len(container_ids)}, container_ids={container_ids}, "
-            f"cpu_usage_total={self.cpu_usage_total:.1f}, memory_usage_total={self.memory_usage_total:.1f}, "
-            f"attrs={getattr(self, 'attrs', None)})"
+            f"hw_specs={getattr(self, 'hw_specs', None)})"
         )
 
     def _get_container(self, container_id: str) -> DockerContainer:
@@ -60,9 +112,8 @@ class Node:
         While maintaining a real-time local cluster state is an option, it is less reliable and potentially more costly
         compared to calling the cluster whenever we require a container instance.
         """
-        client = get_cluster_client(self.api_uri)
         try:
-            c: DockerContainer = client.containers.get(container_id)
+            c: DockerContainer = self._client.containers.get(container_id)
         except NotFound as ex:
             raise ContainerNotFoundException() from ex
         return c
@@ -80,16 +131,15 @@ class Node:
         privileged: bool = False,
         cap_add: t.Optional[list[str]] = None,
     ) -> dict[str, t.Any]:
-        client = get_cluster_client(self.api_uri, timeout=55)
-        c = client.containers.run(
+        c = self._client.containers.run(
             auto_remove=auto_remove,
             cpuset_cpus=",".join(map(str, run_specs.attrs.cpuset_cpus)),
             detach=detach,
             devices=devices,
             device_requests=device_requests,
-            environment=dataclasses.asdict(run_specs.env_vars),
+            environment=run_specs.env_vars.model_dump(),
             image=run_specs.attrs.image_tag,
-            labels=dataclasses.asdict(run_specs.labels),
+            labels=run_specs.labels.model_dump(),
             mem_limit=run_specs.attrs.memory_limit,
             nano_cpus=run_specs.attrs.nanocpus_limit,
             name=run_specs.attrs.name,
@@ -102,7 +152,7 @@ class Node:
         )
 
         return {
-            "node": {"api_uri": self.api_uri, "id": self.id, "region": self.region},
+            "node": {"api_uri": self.docker_api_uri, "id": self.id, "region": self.region},
             "container": {"id": c.id, "cpuset_cpus": run_specs.attrs.cpuset_cpus},
         }
 
@@ -134,19 +184,14 @@ class Node:
         self._get_container(container_id).exec_run(cmd=cmd, user=user, detach=detach)
 
     def pull_image(self, repository: str, tag: str) -> Image:
-        client = get_cluster_client(self.api_uri)
+        client = get_cluster_client(self.docker_api_uri)
         return client.images.pull(repository, tag)
 
     def _update(self) -> None:
-        """Updates state of the node direclty from the cluster.
+        """Updates state of the node direclty from the cluster."""
 
-        Avoid invoking this function from any methods in this class (except in __init__()), as changes will not be
-        applied. The state here is deeply copied from a global CLUSTER.nodes() state and will be discarded upon exit.
-        """
+        client = get_cluster_client(self.docker_api_uri)
 
-        client = get_cluster_client(self.api_uri)
-        info = client.info()
-        self.id = info["ID"]
         self.containers = {}
         for c in client.containers.list():
             if "jukebox_" in c.name:
@@ -161,12 +206,13 @@ class Node:
                 self.cpu_usage_total += c.stats.cpu_usage_perc  # type: ignore[union-attr]
                 self.memory_usage_total += c.stats.memory_usage_perc  # type: ignore[union-attr]
 
-        self.attrs = NodeAttrs(
-            igpu=True,  # TODO: fetch from node
-            dgpu=False,  # TODO: fetch from node
-            cpus=info["NCPU"],
-            total_memory=info["MemTotal"],
-        )
+        # info = client.info()
+        # self.id = info["ID"]
+        # self.hw_specs = Node.NodeHwSpecs(
+        #     gpus=GPUS_BY_FLAVOR.get(OvhNodeFlavor(self.flavor), []), # TODO: get from physical node
+        #     cpus=info["NCPU"],
+        #     total_memory=info["MemTotal"],
+        # )
 
     def cores_load(self) -> dict[int, float]:
         res = {}
@@ -174,7 +220,13 @@ class Node:
             res[c.specs.attrs.cpuset_cpus[0]] = c.stats.cpu_usage_perc if c.stats else 0
         return res
 
+    def busy_cores(self) -> set[int]:
+        busy_cores: set[int] = set()
+        for c in self.containers.values():
+            busy_cores.update(c.specs.attrs.cpuset_cpus)
+        return busy_cores
+
     def free_cores(self) -> set[int]:
-        all_cores = set(range(0, self.attrs.cpus))
-        busy_cores = self.cores_load().keys()
+        all_cores = set(range(0, self.hw_specs.cpus))
+        busy_cores = self.busy_cores()
         return all_cores - busy_cores

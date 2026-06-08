@@ -16,9 +16,8 @@ from fabric import Connection
 from invoke.exceptions import UnexpectedExit
 
 from jukeboxsvc.biz.cluster import (
-    JUKEBOX_CLUSTER,
-    Cluster,
-    get_cluster_state_quick,
+    get_node,
+    get_nodes,
 )
 from jukeboxsvc.biz.container import ContainerRunSpecs
 from jukeboxsvc.biz.errors import (
@@ -29,11 +28,15 @@ from jukeboxsvc.biz.errors import (
 from jukeboxsvc.biz.misc import log_input_output
 from jukeboxsvc.biz.node import Node
 from jukeboxsvc.dto.cluster import (
-    ClusterStatusResponseDTO,
+    ClusterUsageResponseDTO,
     PullContainerImageRequestDTO,
 )
 from jukeboxsvc.dto.container import (
+    GPU_MODELS_SORTED_BY_PERFORMANCE,
+    GPU_VENDOR_BY_MODEL,
+    VIDEO_ENC_BY_GPU_VENDOR,
     DcRegion,
+    GpuModel,
     ResumeContainerRequestDTO,
     RunContainerRequestDTO,
     RunContainerResponseDTO,
@@ -60,12 +63,11 @@ class NodeRequirements:
     """Requirements for selecting a node."""
 
     # TODO: add cpu and memory requirements?
-    dgpu: bool
-    igpu: bool
+    gpu: GpuModel | None
 
 
 def _get_node(node_id: str) -> Node:
-    node: t.Optional[Node] = JUKEBOX_CLUSTER.nodes.get(node_id, None)
+    node: t.Optional[Node] = get_node(node_id)
     if not node:
         raise NodeNotFoundException()
     return node
@@ -95,75 +97,38 @@ def resume_container(node_id: str, container_id: str, req: ResumeContainerReques
 
 
 @log_input_output
-def pick_best_node(regions: list[DcRegion], reqs: NodeRequirements) -> t.Optional[Node]:
-    """Picks a node with lower resources usage as per requirements.
-
-    The selected node should surpass the other nodes in meeting the provided requirements. Note that region and gpu
-    usage requirements should be prioritized over all other requirements. For instance, if a node with region='us-west',
-    dgpu=false is requested, function should try to return nodes in this order:
-        region=us-west-1,dgpu:false (best match)
-        region=us-west-1,dgpu:true (no dgpu-less nodes available, have to waste resources of a valuable dgpu node)
-        DEPRECATED: region=eu-central-1,dgpu:false (no resources in a preferred region, found node in other regions)
-        ...
+def pick_best_node(region: DcRegion, reqs: NodeRequirements) -> t.Optional[Node]:
+    """Picks the oldest node in the cluster (by creation date) with matching resources (so newer nodes remain unused and
+    are removed on autoscale). Dedicated nodes are preferred as they are oldest nodes in any cluster.
 
     Args:
-        regions:
-            DEPRECATED: List of regions ordered by a preference criteria (e.g. best latency).
-            Only the first region in the list is considered for node selection.
-            Caller (appsvc) ensures first region is always the DC with a best latency for a given customer
+        region:
+            The preferred region for node selection.
+            Caller (appsvc) ensures it's always the DC with the best latency for a given customer
         reqs:
             Set of requirements for a node.
 
     Returns:
-        Best matching node or None if we're out of resources in all regions :(.
+        Best matching node or None if we're out of resources in selected region :(.
+        Hopefully new nodes will be added soon by autoscaler.
     """
 
-    # pylint: disable=pointless-string-statement
-    """
-    TODO: getting JUKEBOX_CLUSTER.updated() is pretty heavy, up to 20 seconds to complete depending on the number of
-    running containers in the cluster.
-
-    log.info("getting nodes list started")
-    nodes = list(JUKEBOX_CLUSTER.updated().nodes.values())
-    log.info("getting nodes list finished, %d nodes available", len(nodes))
-
-    regions_weighted = dict(zip(regions, range(1, len(regions) + 1)))
-    dgpu_weighted = {reqs.dgpu: 1, not reqs.dgpu: 2}
-    igpu_weighted = {reqs.igpu: 1, not reqs.igpu: 2}
+    nodes = get_nodes(region=region, init_containers_from_sessions=True)
     sorted_nodes = sorted(
         nodes,
-        key=lambda n: (
-            regions_weighted.get(n.region, 1000),
-            dgpu_weighted.get(n.attrs.dgpu),
-            igpu_weighted.get(n.attrs.igpu),
-            len(n.cores_load()),
-        ),
+        key=lambda n: n.created_ts,
     )
-
     for node in sorted_nodes:
-        free_cores = node.free_cores()
-        if free_cores:
-            return node
-    return None
-    """
-
-    nodes = JUKEBOX_CLUSTER.nodes.values()  # can be an obsolete state, but it is ok for a best effort scheduling
-    regions_weighted = dict(zip(regions, range(1, len(regions) + 1)))
-    dgpu_weighted = {reqs.dgpu: 1, not reqs.dgpu: 2}
-    igpu_weighted = {reqs.igpu: 1, not reqs.igpu: 2}
-    sorted_nodes = sorted(
-        nodes,
-        key=lambda n: (
-            regions_weighted.get(n.region, 1000),
-            dgpu_weighted.get(n.attrs.dgpu),
-            igpu_weighted.get(n.attrs.igpu),
-        ),
-    )
-    cluster_state_quick = get_cluster_state_quick()
-    for node in sorted_nodes:
-        node_ = cluster_state_quick.get_node(node.id)
-        if node_ and node_.region == DcRegion(regions[0]) and cluster_state_quick.get_free_cores(node_.id):
-            return node
+        if not node.free_cores():
+            continue
+        if reqs.gpu is not None:
+            min_perf = GPU_MODELS_SORTED_BY_PERFORMANCE.index(reqs.gpu)
+            if not any(
+                gpu in GPU_MODELS_SORTED_BY_PERFORMANCE and GPU_MODELS_SORTED_BY_PERFORMANCE.index(gpu) >= min_perf
+                for gpu in node.hw_specs.gpus
+            ):
+                continue
+        return node
     return None
 
 
@@ -285,8 +250,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         return f"jukebox_{run_specs.user_id}_{run_specs.app_descr.slug}_{rnd}"
 
     node = pick_best_node(
-        regions=run_specs.preferred_dcs,
-        reqs=NodeRequirements(igpu=run_specs.reqs.hw.igpu, dgpu=run_specs.reqs.hw.dgpu),
+        region=run_specs.preferred_dcs[0],
+        reqs=NodeRequirements(gpu=run_specs.reqs.hw.gpu),
     )
     if not node:
         raise ClusterOutOfResourcesException()
@@ -294,8 +259,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     # running docker container without a cpu affinity significantly degrades performance even of a single running app
     # TODO: investigate why using more than 1 core slows down the app;
     # e.g. in Syberia 1, sound becomes choppy when using more than 1 core.
-    cluster_state_quick = get_cluster_state_quick()
-    free_cores = cluster_state_quick.get_free_cores(node.id)
+    free_cores = node.free_cores()
     # reserve core 0 for admin access in US_WEST_1 region
     if os.getenv("RESERVE_ADMIN_CPU_CORE", "0") == "1":
         if node.region == DcRegion.US_WEST_1 and run_specs.user_id != 0:
@@ -307,13 +271,14 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         "/dev/snd/seq:/dev/snd/seq:rwm",
     ]
     device_requests = None
-    # TODO: gpu devices should be in sync with igpu/dgpu requirements, and e.g. WLR_RENDER_DRM_DEVICE
-    igpu_card_id = os.getenv("IGPU_CARD_ID", "0")
-    igpu_render_device_id = os.getenv("IGPU_RENDER_DEVICE_ID", "128")
-    if run_specs.reqs.container.video_enc == VideoEnc.GPU_INTEL:
-        devices.append(f"/dev/dri/card{igpu_card_id}:/dev/dri/card{igpu_card_id}:rwm")
-        devices.append(f"/dev/dri/renderD{igpu_render_device_id}:/dev/dri/renderD{igpu_render_device_id}:rwm")
-    elif run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
+    # TODO: gpu devices should be in sync with gpu requirements, and e.g. WLR_RENDER_DRM_DEVICE
+    gpu_card_id = os.getenv("GPU_CARD_ID", "0")
+    gpu_render_device_id = os.getenv("GPU_RENDER_DEVICE_ID", "128")
+    video_enc = VIDEO_ENC_BY_GPU_VENDOR.get(GPU_VENDOR_BY_MODEL[node.hw_specs.gpus[0]], VideoEnc.CPU)  # TODO: gpus[0]?
+    if video_enc == VideoEnc.GPU_INTEL:
+        devices.append(f"/dev/dri/card{gpu_card_id}:/dev/dri/card{gpu_card_id}:rwm")
+        devices.append(f"/dev/dri/renderD{gpu_render_device_id}:/dev/dri/renderD{gpu_render_device_id}:rwm")
+    elif video_enc == VideoEnc.GPU_NVIDIA:
         device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
     if run_specs.reqs.container.runner.name == "qemu":
@@ -332,7 +297,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
 
     clone_app(run_specs, region=node.region)
 
-    image_name_with_tag = run_specs.reqs.container.image_name_with_tag()
+    image_name_with_tag = run_specs.reqs.container.image_name_with_tag(video_enc)
     docker_image_tag = f"{jukebox_docker_repo_prefix}/{image_name_with_tag}"
     env_vars = {
         "DISPLAY": env_display,
@@ -353,7 +318,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         "GST_DEBUG": jukebox_container_env_gst_debug,
     }
     privileged = False
-    if run_specs.reqs.container.video_enc == VideoEnc.GPU_NVIDIA:
+    if video_enc == VideoEnc.GPU_NVIDIA:
         env_vars["NVIDIA_DRIVER_CAPABILITIES"] = "all"
         # TODO: investigate if we can run nvidia-container-runtime without privileged mode,
         # it was possible in Debian 11, but not in 12
@@ -389,35 +354,30 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         privileged=privileged,
         cap_add=cap_add,
     )
-    return RunContainerResponseDTO.Schema().load(run_container_res)
+    return RunContainerResponseDTO.model_validate(run_container_res)
 
 
-# @log_input_output
-def cluster_state() -> Cluster:
-    return JUKEBOX_CLUSTER.updated()
-
-
-def cluster_status() -> ClusterStatusResponseDTO:
+def cluster_status() -> ClusterUsageResponseDTO:
     """Returns cluster usage per region as a ratio of used cores to total cores."""
-    state = get_cluster_state_quick()
+    nodes = get_nodes(init_containers_from_sessions=True)
     region_cpus: dict[str, int] = {}
     region_used: dict[str, int] = {}
-    for node in state.nodes.values():
-        region_cpus[node.region] = region_cpus.get(node.region, 0) + node.cpus
-        region_used[node.region] = region_used.get(node.region, 0) + len(node.containers)
+    for node in nodes:
+        region_cpus[node.region.value] = region_cpus.get(node.region.value, 0) + node.hw_specs.cpus
+        region_used[node.region.value] = region_used.get(node.region.value, 0) + len(node.containers)
     regions = [
-        ClusterStatusResponseDTO.RegionUsage(
+        ClusterUsageResponseDTO.RegionUsage(
             region=region,
             usage=region_used.get(region, 0) / cpus if cpus > 0 else 0.0,
         )
         for region, cpus in region_cpus.items()
     ]
-    return ClusterStatusResponseDTO(regions=regions)
+    return ClusterUsageResponseDTO(regions=regions)
 
 
 def _pull_image_proc(image: PullContainerImageRequestDTO) -> None:
     pull_image_max_workers = 20
-    avail_nodes = list(JUKEBOX_CLUSTER.updated().nodes.values())
+    avail_nodes = get_nodes()
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=pull_image_max_workers) as executor:
             images = list(

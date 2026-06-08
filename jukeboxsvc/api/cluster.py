@@ -1,39 +1,43 @@
-from flask import (
-    Response,
-    request,
-)
-from flask_restful import Resource
+from fastapi import APIRouter
 
+from jukeboxsvc.biz.cluster import get_nodes_update
+from jukeboxsvc.biz.cluster_scaler import scale_jukebox_cluster
 from jukeboxsvc.biz.jukebox import (
-    cluster_state,
     cluster_status,
     pull_image,
 )
 from jukeboxsvc.dto.cluster import (
     ClusterStateResponseDTO,
-    ClusterStatusResponseDTO,
+    ClusterUsageResponseDTO,
+    NodeDTO,
     PullContainerImageRequestDTO,
 )
 
-
-class ClusterState(Resource):
-    def get(self) -> Response:
-        """Returns clusters' current state."""
-        res: dict = ClusterStateResponseDTO.Schema().dump(cluster_state())
-        return res, 200
+router = APIRouter()
 
 
-class ClusterStatus(Resource):
-    def get(self) -> Response:
-        """Returns cluster usage per region."""
-        res: dict = ClusterStatusResponseDTO.Schema().dump(cluster_status())
-        return res, 200
+@router.get("/cluster/status", response_model=ClusterUsageResponseDTO, operation_id="get_cluster_status")
+def cluster_status_endpoint() -> ClusterUsageResponseDTO:
+    """Returns cluster usage per region."""
+    return cluster_status()
 
 
-class ClusterPullImage(Resource):
-    def post(self) -> Response:
-        """Pulls specified image onto all available cluster nodes (asynchronously)."""
+@router.post("/cluster/pull_image", status_code=200, operation_id="pull_cluster_image")
+def cluster_pull_image(image: PullContainerImageRequestDTO) -> None:
+    """Pulls specified image onto all available cluster nodes (asynchronously)."""
+    pull_image(image)
 
-        image: PullContainerImageRequestDTO = PullContainerImageRequestDTO.Schema().load(data=request.get_json())
-        pull_image(image)
-        return "", 200
+
+@router.get("/cluster/state", response_model=ClusterStateResponseDTO, operation_id="get_cluster_state")
+async def cluster_state() -> ClusterStateResponseDTO:
+    """Returns current state of all jukebox cluster nodes,
+    fetched directly from Docker daemons on all jukebox nodes."""
+    nodes = await get_nodes_update()
+    return ClusterStateResponseDTO(nodes=[NodeDTO.from_node(n) for n in nodes])
+
+
+@router.post("/cluster/scale", status_code=200, operation_id="scale_cluster")
+def cluster_scale() -> None:
+    """Scales the jukebox cluster: adds nodes when CPU utilization exceeds threshold,
+    removes old underutilized nodes, and syncs the OVH cluster state with SQL cluster schema."""
+    scale_jukebox_cluster()

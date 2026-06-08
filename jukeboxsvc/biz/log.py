@@ -1,19 +1,13 @@
 import logging
 
-from flask import Flask
+from fastapi import FastAPI
 
 
-def init_app(app: Flask) -> None:
-    # log setup
-    # TODO: use app.config["DEBUG"] flag for log_level
+def init_app(app: FastAPI) -> None:  # noqa: ARG001  # pylint: disable=unused-argument
     log_level = logging.DEBUG
 
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"))
-
-    app.logger.handlers.clear()
-    app.logger.addHandler(handler)
-    app.logger.setLevel(log_level)
 
     app_log = logging.getLogger("jukeboxsvc")
     app_log.handlers.clear()
