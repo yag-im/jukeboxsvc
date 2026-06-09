@@ -1,7 +1,12 @@
+import asyncio
+
 from fastapi import APIRouter
 
 from jukeboxsvc.biz.cluster import get_nodes_update
-from jukeboxsvc.biz.cluster_scaler import scale_jukebox_cluster
+from jukeboxsvc.biz.cluster_scaler import (
+    scale_jukebox_cluster,
+    sync_cluster_state,
+)
 from jukeboxsvc.biz.jukebox import (
     cluster_status,
     pull_image,
@@ -23,9 +28,9 @@ def cluster_status_endpoint() -> ClusterUsageResponseDTO:
 
 
 @router.post("/cluster/pull_image", status_code=200, operation_id="pull_cluster_image")
-def cluster_pull_image(image: PullContainerImageRequestDTO) -> None:
-    """Pulls specified image onto all available cluster nodes (asynchronously)."""
-    pull_image(image)
+async def cluster_pull_image(image: PullContainerImageRequestDTO) -> None:
+    """Pulls specified image onto all available cluster nodes."""
+    asyncio.create_task(pull_image(image))
 
 
 @router.get("/cluster/state", response_model=ClusterStateResponseDTO, operation_id="get_cluster_state")
@@ -41,3 +46,9 @@ def cluster_scale() -> None:
     """Scales the jukebox cluster: adds nodes when CPU utilization exceeds threshold,
     removes old underutilized nodes, and syncs the OVH cluster state with SQL cluster schema."""
     scale_jukebox_cluster()
+
+
+@router.post("/cluster/state/sync", status_code=200, operation_id="sync_cluster_state")
+def cluster_state_sync() -> None:
+    """Syncs cluster state with OVH API: updates SQL tables in "cluster" schema with the current list of nodes."""
+    sync_cluster_state()

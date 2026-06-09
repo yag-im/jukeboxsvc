@@ -1,4 +1,4 @@
-import concurrent.futures
+import asyncio
 import json
 import logging
 import os
@@ -7,7 +7,6 @@ import shutil
 import typing as t
 import uuid
 from dataclasses import dataclass
-from multiprocessing import Process
 from pathlib import Path
 
 import docker
@@ -375,31 +374,17 @@ def cluster_status() -> ClusterUsageResponseDTO:
     return ClusterUsageResponseDTO(regions=regions)
 
 
-def _pull_image_proc(image: PullContainerImageRequestDTO) -> None:
-    pull_image_max_workers = 20
+@log_input_output
+async def pull_image(image: PullContainerImageRequestDTO) -> None:
+    """Pull specified image onto every available node in the cluster."""
     avail_nodes = get_nodes()
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=pull_image_max_workers) as executor:
-            images = list(
-                executor.map(
-                    lambda n: n.pull_image(image.repository, image.tag),
-                    avail_nodes,
-                )
-            )
-            if len(images) != len(avail_nodes):
-                log.error("image pull error, expected %d images, got: %d images.", len(avail_nodes), len(images))
+        images = await asyncio.gather(
+            *[asyncio.to_thread(n.pull_image, image.repository, image.tag) for n in avail_nodes]
+        )
+        if len(images) != len(avail_nodes):
+            log.error("image pull error, expected %d images, got: %d images.", len(avail_nodes), len(images))
     except Exception as e:  # pylint: disable=broad-exception-caught
         log.error(e, exc_info=True)
     else:
         log.info("successfully pulled image: %s on all available nodes", image)
-
-
-@log_input_output
-def pull_image(image: PullContainerImageRequestDTO) -> None:
-    """Pull specified image onto the every available node in the cluster.
-
-    Runs in a separate process so the web server can terminate request. TODO: move to asyncjobs?
-    """
-    p = Process(target=_pull_image_proc, args=(image,))
-    p.daemon = True
-    p.start()

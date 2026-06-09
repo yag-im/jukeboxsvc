@@ -98,7 +98,7 @@ def _sync_appstor_cluster() -> None:
     known_nodes: list[AppstorNodeDAO] = AppstorNodeDAO.query.filter(
         AppstorNodeDAO.node_type != OvhNodeType.DEDICATED.value
     ).all()
-    existing_by_id: dict[str, AppstorNodeDAO] = {row.id: row for row in known_nodes}
+    existing_by_id: dict[str, AppstorNodeDAO] = {row.uuid: row for row in known_nodes}
     ovh_ids: set[str] = {n.id for n in active_ovh_cloud_nodes}
     added: list[OvhClusterNodeDescr] = []
     removed: list[AppstorNodeDAO] = []
