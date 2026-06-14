@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import random
@@ -136,7 +135,7 @@ def _get_clone_subpath(run_specs: RunContainerRequestDTO) -> str:
 
 
 @log_input_output
-def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
+def clone_app(run_specs: RunContainerRequestDTO, region: DcRegion, shard_id: int) -> None:
     """Creates an app clone (when needed) in a given DC region.
     Changed parts (game saves) should be synced asynchronously later (TODO?)
 
@@ -145,8 +144,7 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
 
     Therefore using a "true" server-side copy (through the ssh tunnel).
     """
-    appstor_nodes = json.loads(os.environ.get("APPSTOR_NODES", "[]"))
-    if not appstor_nodes:
+    if os.environ.get("APP_ENV") == "local":
         # pure local host setup (for local dev mode only)
         src_path: Path = (
             Path(os.environ["DATA_DIR"])
@@ -165,16 +163,14 @@ def clone_app(run_specs: RunContainerRequestDTO, region: str) -> None:
             shutil.copytree(src_path, dst_path, symlinks=True)
         return
     appstor_user = os.environ["APPSTOR_USER"]
-    appstor_instance = next(filter(lambda i: i["region"] == region, appstor_nodes), None)
-    if not appstor_instance:
-        raise JukeboxOpException(message=f"no appstor instancees in specified region: {region}")
+    appstor_instance = f"appstor{shard_id}-{region.value}"
     cmd = f"/opt/yag/appstor/clone_app.sh {run_specs.user_id} {run_specs.app_descr.slug} \
         {run_specs.app_descr.get_app_path_release_uuid()}"
     try:
         with Connection(
-            host=appstor_instance["host"],
+            host=appstor_instance,
             user=appstor_user,
-            port=appstor_instance["ssh_port"],
+            port=22,
             connect_kwargs={"key_filename": "/opt/yag/jukeboxsvc/.ssh/id_ed25519"},
         ) as conn:
             clone_res = conn.run(
@@ -295,7 +291,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         env_display = None
         env_show_pointer = None
 
-    clone_app(run_specs, region=node.region)
+    # TODO: determine the user and region, instead of hardcoding to 0
+    clone_app(run_specs, region=node.region, shard_id=0)
 
     image_name_with_tag = run_specs.reqs.container.image_name_with_tag(video_enc)
     docker_image_tag = f"{jukebox_docker_repo_prefix}/{image_name_with_tag}"
