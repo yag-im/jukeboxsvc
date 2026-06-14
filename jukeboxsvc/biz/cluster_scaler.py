@@ -5,11 +5,8 @@ from datetime import (
     timezone,
 )
 
-from jukeboxsvc.biz.cluster import get_nodes
-from jukeboxsvc.biz.models import (
-    AppstorNodeDAO,
-    JukeboxNodeDAO,
-)
+from jukeboxsvc.biz.cluster import get_jukebox_nodes
+from jukeboxsvc.biz.models import NodeDAO
 from jukeboxsvc.biz.node import Node
 from jukeboxsvc.biz.ovh_cluster import (
     create_cloud_instance,
@@ -35,108 +32,55 @@ JUKEBOX_NODE_IMAGE_NAME = "debian13-jukebox-gpu-nvidia"
 log = logging.getLogger("jukeboxsvc")
 
 
-def _appstor_share_id_from_ip(ip: str) -> int:
-    return int(ip.split(".")[-1]) % 200
-
-
 def _get_ovh_nodes_by_service(service: NodeServiceType) -> list[OvhClusterNodeDescr]:
     return [n for n in get_all_nodes() if n.name.startswith(service.value)]
 
 
-def _sync_jukebox_cluster() -> None:
-    active_ovh_cloud_nodes = [
-        n
-        for n in _get_ovh_nodes_by_service(NodeServiceType.JUKEBOX)
-        if n.node_type != OvhNodeType.DEDICATED and n.status == OvhNodeStatus.ACTIVE
-    ]
-    known_nodes: list[JukeboxNodeDAO] = JukeboxNodeDAO.query.filter(
-        JukeboxNodeDAO.node_type != OvhNodeType.DEDICATED.value
-    ).all()
-    existing_by_id: dict[str, JukeboxNodeDAO] = {row.uuid: row for row in known_nodes}
-    ovh_ids: set[str] = {n.id for n in active_ovh_cloud_nodes}
-
-    added: list[OvhClusterNodeDescr] = []
-    removed: list[JukeboxNodeDAO] = []
-
-    for node in active_ovh_cloud_nodes:
-        if node.id not in existing_by_id:
-            sqldb.session.add(
-                JukeboxNodeDAO(
-                    id=node.id,
-                    private_ip=node.private_ip,
-                    public_ip=node.public_ip,
-                    region=node.region.value,
-                    node_type=node.node_type.value,
-                    flavor=node.flavor.value,
-                    created_ts=node.created_ts,
-                )
-            )
-            added.append(node)
-
-    for node_id, row in existing_by_id.items():
-        if node_id not in ovh_ids:
-            sqldb.session.delete(row)
-            removed.append(row)
-
-    sqldb.session.commit()
-
-    log.info(
-        "sync_jukebox_cluster: added %d node(s) %s, removed %d node(s) %s",
-        len(added),
-        [{"private_ip": n.private_ip, "region": n.region.value, "flavor": n.flavor.value} for n in added],
-        len(removed),
-        [{"private_ip": r.private_ip, "region": r.region, "flavor": r.flavor} for r in removed],
-    )
-
-
-def _sync_appstor_cluster() -> None:
-    active_ovh_cloud_nodes = [
-        n
-        for n in _get_ovh_nodes_by_service(NodeServiceType.APPSTOR)
-        if n.node_type != OvhNodeType.DEDICATED and n.status == OvhNodeStatus.ACTIVE
-    ]
-    known_nodes: list[AppstorNodeDAO] = AppstorNodeDAO.query.filter(
-        AppstorNodeDAO.node_type != OvhNodeType.DEDICATED.value
-    ).all()
-    existing_by_id: dict[str, AppstorNodeDAO] = {row.uuid: row for row in known_nodes}
-    ovh_ids: set[str] = {n.id for n in active_ovh_cloud_nodes}
-    added: list[OvhClusterNodeDescr] = []
-    removed: list[AppstorNodeDAO] = []
-    for node in active_ovh_cloud_nodes:
-        if node.id not in existing_by_id:
-            sqldb.session.add(
-                AppstorNodeDAO(
-                    uuid=node.id,  # OVH UUID
-                    private_ip=node.private_ip,
-                    region=node.region.value,
-                    node_type=node.node_type.value,
-                    flavor=node.flavor.value,
-                    share_id=_appstor_share_id_from_ip(node.private_ip),  # type: ignore[arg-type]
-                    created_ts=node.created_ts,
-                )
-            )
-            added.append(node)
-
-    for node_id, row in existing_by_id.items():
-        if node_id not in ovh_ids:
-            sqldb.session.delete(row)
-            removed.append(row)
-
-    sqldb.session.commit()
-
-    log.info(
-        "sync_appstor_cluster: added %d node(s) %s, removed %d node(s) %s",
-        len(added),
-        [{"private_ip": n.private_ip, "region": n.region.value, "flavor": n.flavor.value} for n in added],
-        len(removed),
-        [{"private_ip": r.private_ip, "region": r.region, "flavor": r.flavor} for r in removed],
-    )
-
-
 def sync_cluster_state() -> None:
-    """Syncs cluster state with OVH API: updates SQL tables in "cluster" schema with the current list of nodes"""
-    _sync_jukebox_cluster()
-    _sync_appstor_cluster()
+    """Syncs cluster state with OVH API: updates SQL table cluster.nodes with the current list of nodes"""
+    for service_type in (NodeServiceType.JUKEBOX, NodeServiceType.APPSTOR):
+        active_ovh_cloud_nodes = [
+            n for n in _get_ovh_nodes_by_service(service_type) if n.status == OvhNodeStatus.ACTIVE
+        ]
+        known_nodes: list[NodeDAO] = NodeDAO.query.filter(
+            NodeDAO.service_type == service_type.value,
+        ).all()
+        existing_by_id: dict[str, NodeDAO] = {row.uuid: row for row in known_nodes}
+        ovh_ids: set[str] = {n.id for n in active_ovh_cloud_nodes}
+
+        added: list[OvhClusterNodeDescr] = []
+        removed: list[NodeDAO] = []
+
+        for node in active_ovh_cloud_nodes:
+            if node.id not in existing_by_id:
+                sqldb.session.add(
+                    NodeDAO(
+                        uuid=node.id,
+                        region=node.region.value,
+                        service_type=service_type.value,
+                        node_ix=node.node_ix,
+                        node_type=node.node_type.value,
+                        node_flavor=node.flavor.value.lower(),
+                        created_ts=node.created_ts,
+                    )
+                )
+                added.append(node)
+
+        for node_id, row in existing_by_id.items():
+            if node_id not in ovh_ids:
+                sqldb.session.delete(row)
+                removed.append(row)
+
+        sqldb.session.commit()
+
+        log.info(
+            "sync_cluster_state[%s]: added %d node(s) %s, removed %d node(s) %s",
+            service_type.value,
+            len(added),
+            [{"region": n.region.value, "flavor": n.flavor.value} for n in added],
+            len(removed),
+            [{"region": r.region, "node_flavor": r.node_flavor} for r in removed],
+        )
 
 
 def add_jukebox_node(region: DcRegion) -> None:
@@ -158,7 +102,7 @@ def add_jukebox_node(region: DcRegion) -> None:
 
 def scale_jukebox_cluster() -> None:
     """Scales the jukebox cluster up or down based on CPU utilization, then syncs cluster state."""
-    nodes = get_nodes(init_containers_from_sessions=True)
+    nodes = get_jukebox_nodes(init_containers_from_sessions=True)
 
     # Scale up: add a node in any region whose CPU utilization exceeds the threshold
     if nodes:

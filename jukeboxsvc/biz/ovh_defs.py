@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -59,7 +60,8 @@ GPU_BY_CPU: dict[str, GpuModel] = {
 }
 
 GPUS_BY_FLAVOR: dict[OvhNodeFlavor, list[GpuModel]] = {
-    OvhNodeFlavor.CUSTOM_1: [GpuModel.INTEL_UHD_750, GpuModel.NVIDIA_GTX_1060],
+    OvhNodeFlavor.CUSTOM_1: [GpuModel.NVIDIA_GTX_1060, GpuModel.INTEL_UHD_750],
+    # OvhNodeFlavor.CUSTOM_1: [GpuModel.INTEL_UHD_750, GpuModel.NVIDIA_GTX_1060],
     OvhNodeFlavor.RISE_3: [GpuModel.INTEL_UHD_P630],
     OvhNodeFlavor.T2_LE_45: [GpuModel.NVIDIA_TESLA_V100S],
     OvhNodeFlavor.L4_90: [GpuModel.NVIDIA_L4],
@@ -155,6 +157,23 @@ class OvhClusterNodeDescr(BaseModel):
             region=normalize_region(info["region"]),
             node_type=OvhNodeType.DEDICATED,
             flavor=OvhNodeFlavor(info["commercialRange"]),
-            status=OvhNodeStatus.ACTIVE,  # no "status" field for dedicated nodes; OK state implies active
-            created_ts=None,  # dedicated nodes have no creation time
+            status=OvhNodeStatus.ACTIVE,  # no "status" field for dedicated nodes; OK state implies "active"
+            created_ts=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),  # dedicated nodes have no creation time
         )
+
+    @property
+    def node_ix(self) -> int:
+        # TODO: drop private_ip parsing once all instance names are standartized (current appstor nodes are not)
+        if self.node_type == OvhNodeType.DEDICATED:
+            # Dedicated nodes have no private IP; extract index from name (e.g. "jukebox0-us-east-1" -> 0)
+            match = re.search(r"(\d+)", self.name)
+            if match is None:
+                raise ValueError(f"node '{self.name}' has no index in name; cannot determine node index")
+            return int(match.group(1))
+        if self.private_ip is None:
+            raise ValueError(f"node '{self.name}' has no private IP; cannot determine node index")
+        last_octet = int(self.private_ip.split(".")[-1])
+        if NodeServiceType.JUKEBOX.value in self.name:
+            return last_octet - 2
+        else:
+            return last_octet % 200

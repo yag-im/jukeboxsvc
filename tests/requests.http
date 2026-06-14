@@ -24,8 +24,8 @@ POST http://localhost/cluster/pull_image
 content-type: application/json
 
 {
-    "repository": "ghcr.io/yag-im/jukebox/x11_gpu-intel_scummvm",
-    "tag": "2.9.0"
+    "repository": "ghcr.io/yag-im/jukebox/x11_gpu-nvidia_wine",
+    "tag": "10.0"
 }
 ###
 

@@ -15,8 +15,8 @@ from fabric import Connection
 from invoke.exceptions import UnexpectedExit
 
 from jukeboxsvc.biz.cluster import (
-    get_node,
-    get_nodes,
+    get_jukebox_node,
+    get_jukebox_nodes,
 )
 from jukeboxsvc.biz.container import ContainerRunSpecs
 from jukeboxsvc.biz.errors import (
@@ -66,7 +66,7 @@ class NodeRequirements:
 
 
 def _get_node(node_id: str) -> Node:
-    node: t.Optional[Node] = get_node(node_id)
+    node: t.Optional[Node] = get_jukebox_node(node_id)
     if not node:
         raise NodeNotFoundException()
     return node
@@ -112,7 +112,7 @@ def pick_best_node(region: DcRegion, reqs: NodeRequirements) -> t.Optional[Node]
         Hopefully new nodes will be added soon by autoscaler.
     """
 
-    nodes = get_nodes(region=region, init_containers_from_sessions=True)
+    nodes = get_jukebox_nodes(region=region, init_containers_from_sessions=True)
     sorted_nodes = sorted(
         nodes,
         key=lambda n: n.created_ts,
@@ -271,10 +271,11 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
     ]
     device_requests = None
     # TODO: gpu devices should be in sync with gpu requirements, and e.g. WLR_RENDER_DRM_DEVICE
-    gpu_card_id = os.getenv("GPU_CARD_ID", "0")
-    gpu_render_device_id = os.getenv("GPU_RENDER_DEVICE_ID", "128")
+
     video_enc = VIDEO_ENC_BY_GPU_VENDOR.get(GPU_VENDOR_BY_MODEL[node.hw_specs.gpus[0]], VideoEnc.CPU)  # TODO: gpus[0]?
     if video_enc == VideoEnc.GPU_INTEL:
+        gpu_card_id = os.getenv("GPU_CARD_ID", "0")
+        gpu_render_device_id = os.getenv("GPU_RENDER_DEVICE_ID", "128")
         devices.append(f"/dev/dri/card{gpu_card_id}:/dev/dri/card{gpu_card_id}:rwm")
         devices.append(f"/dev/dri/renderD{gpu_render_device_id}:/dev/dri/renderD{gpu_render_device_id}:rwm")
     elif video_enc == VideoEnc.GPU_NVIDIA:
@@ -358,7 +359,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
 
 def cluster_status() -> ClusterUsageResponseDTO:
     """Returns cluster usage per region as a ratio of used cores to total cores."""
-    nodes = get_nodes(init_containers_from_sessions=True)
+    nodes = get_jukebox_nodes(init_containers_from_sessions=True)
     region_cpus: dict[str, int] = {}
     region_used: dict[str, int] = {}
     for node in nodes:
@@ -377,7 +378,7 @@ def cluster_status() -> ClusterUsageResponseDTO:
 @log_input_output
 async def pull_image(image: PullContainerImageRequestDTO) -> None:
     """Pull specified image onto every available node in the cluster."""
-    avail_nodes = get_nodes()
+    avail_nodes = get_jukebox_nodes()
     try:
         images = await asyncio.gather(
             *[asyncio.to_thread(n.pull_image, image.repository, image.tag) for n in avail_nodes]

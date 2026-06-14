@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import APIRouter
 
-from jukeboxsvc.biz.cluster import get_nodes_update
+from jukeboxsvc.biz.cluster import get_jukebox_nodes_update
 from jukeboxsvc.biz.cluster_scaler import (
     scale_jukebox_cluster,
     sync_cluster_state,
@@ -27,7 +27,7 @@ def cluster_status_endpoint() -> ClusterUsageResponseDTO:
     return cluster_status()
 
 
-@router.post("/cluster/pull_image", status_code=200, operation_id="pull_cluster_image")
+@router.post("/cluster/pull_image", status_code=204, operation_id="pull_cluster_image")
 async def cluster_pull_image(image: PullContainerImageRequestDTO) -> None:
     """Pulls specified image onto all available cluster nodes."""
     asyncio.create_task(pull_image(image))
@@ -37,7 +37,7 @@ async def cluster_pull_image(image: PullContainerImageRequestDTO) -> None:
 async def cluster_state() -> ClusterStateResponseDTO:
     """Returns current state of all jukebox cluster nodes,
     fetched directly from Docker daemons on all jukebox nodes."""
-    nodes = await get_nodes_update()
+    nodes = await get_jukebox_nodes_update()
     return ClusterStateResponseDTO(nodes=[NodeDTO.from_node(n) for n in nodes])
 
 

@@ -9,7 +9,6 @@ from docker.errors import (
     NotFound,
 )
 from docker.models.containers import Container as DockerContainer
-from docker.models.images import Image
 from docker.types import Mount
 from pydantic import BaseModel
 from requests import JSONDecodeError
@@ -23,7 +22,7 @@ from jukeboxsvc.biz.misc import (
     get_cluster_client,
     log_input_output,
 )
-from jukeboxsvc.biz.models import JukeboxNodeDAO
+from jukeboxsvc.biz.models import NodeDAO
 from jukeboxsvc.biz.ovh_defs import (
     CPUS_BY_FLAVOR,
     GPUS_BY_FLAVOR,
@@ -83,12 +82,16 @@ class Node:
             self._update()
 
     @classmethod
-    def from_jukebox_node_dao(cls, dao: JukeboxNodeDAO, do_update: bool = False) -> "Node":
+    def from_node_dao(cls, dao: NodeDAO, do_update: bool = False) -> "Node":
         docker_api_port = int(os.environ.get("DOCKER_API_PORT", "2375"))
-        flavor = OvhNodeFlavor(dao.flavor.upper() if dao.node_type == OvhNodeType.DEDICATED.value else dao.flavor)
+        region = DcRegion(dao.region)
+        host = dao.hostname
+        flavor = OvhNodeFlavor(
+            dao.node_flavor.upper() if dao.node_type == OvhNodeType.DEDICATED.value else dao.node_flavor
+        )
         node = cls(
-            region=DcRegion(dao.region),
-            docker_api_uri=f"http://{dao.private_ip}:{docker_api_port}",
+            region=region,
+            docker_api_uri=f"http://{host}:{docker_api_port}",
             flavor=flavor,
             node_id=dao.uuid,
             created_ts=dao.created_ts,
@@ -183,9 +186,20 @@ class Node:
     def exec_run_container(self, container_id: str, cmd: str, user: str, detach: bool = True) -> None:
         self._get_container(container_id).exec_run(cmd=cmd, user=user, detach=detach)
 
-    def pull_image(self, repository: str, tag: str) -> Image:
+    def pull_image(self, repository: str, tag: str) -> None:
         client = get_cluster_client(self.docker_api_uri)
-        return client.images.pull(repository, tag)
+        log.info("pull_image: starting pull %s:%s on %s", repository, tag, self.docker_api_uri)
+        try:
+            for line in client.api.pull(repository, tag=tag, stream=True, decode=True):
+                if "error" in line:
+                    log.error("pull_image: %s:%s on %s: %s", repository, tag, self.docker_api_uri, line["error"])
+                    return
+                if line.get("status") == "Pull complete" or line.get("status", "").startswith("Status:"):
+                    log.info("pull_image: %s:%s on %s: %s", repository, tag, self.docker_api_uri, line.get("status"))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            log.error("pull_image: %s:%s on %s failed: %s", repository, tag, self.docker_api_uri, e, exc_info=True)
+            return
+        log.info("pull_image: finished %s:%s on %s", repository, tag, self.docker_api_uri)
 
     def _update(self) -> None:
         """Updates state of the node direclty from the cluster."""

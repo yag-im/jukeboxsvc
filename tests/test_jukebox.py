@@ -58,7 +58,7 @@ class TestJukebox:
                     return nodes
                 return nodes_by_region.get(region, [])
 
-            monkeypatch.setattr(jukebox, "get_nodes", mock_get_nodes, raising=True)
+            monkeypatch.setattr(jukebox, "get_jukebox_nodes", mock_get_nodes, raising=True)
 
         # no nodes
         nodes = []
