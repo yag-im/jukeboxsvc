@@ -1,5 +1,5 @@
 import logging
-import time
+import os
 from datetime import (
     datetime,
     timezone,
@@ -20,6 +20,10 @@ from jukeboxsvc.biz.ovh_defs import (
     OvhNodeStatus,
     OvhNodeType,
 )
+from jukeboxsvc.biz.ovh_utils import (
+    build_jukebox_image_user_data,
+    node_ix_to_private_ip,
+)
 from jukeboxsvc.biz.sqldb import sqldb
 from jukeboxsvc.dto.container import DcRegion
 
@@ -37,10 +41,15 @@ def _get_ovh_nodes_by_service(service: NodeServiceType) -> list[OvhClusterNodeDe
 
 
 def sync_cluster_state() -> None:
-    """Syncs cluster state with OVH API: updates SQL table cluster.nodes with the current list of nodes"""
+    """Syncs cluster state with OVH API: updates SQL table cluster.nodes with the current active nodes"""
     for service_type in (NodeServiceType.JUKEBOX, NodeServiceType.APPSTOR):
+        # dedicated servers are global for all envs,
+        # so need to check a server name suffix to match the current environment
         active_ovh_cloud_nodes = [
-            n for n in _get_ovh_nodes_by_service(service_type) if n.status == OvhNodeStatus.ACTIVE
+            n
+            for n in _get_ovh_nodes_by_service(service_type)
+            if n.status == OvhNodeStatus.ACTIVE
+            and (n.node_type != OvhNodeType.DEDICATED or n.name.endswith(f"-{os.environ.get('APP_ENV')}"))
         ]
         known_nodes: list[NodeDAO] = NodeDAO.query.filter(
             NodeDAO.service_type == service_type.value,
@@ -90,10 +99,20 @@ def add_jukebox_node(region: DcRegion) -> None:
     if building:
         log.warning("add_jukebox_node: %d node(s) already in build state, skipping creation", len(building))
         return
-    name = f"jukebox-instance-{int(time.time())}"
-    ovh_id = create_cloud_instance(region=region, flavor=JUKEBOX_NODE_FLAVOR, name=name, image=JUKEBOX_NODE_IMAGE_NAME)
+    node_ix = max([n.node_ix for n in jukebox_nodes], default=-1) + 1
+    name = f"jukebox{node_ix}-{region.value}"
+    private_ip = node_ix_to_private_ip(NodeServiceType.JUKEBOX, region, node_ix)
+    user_data = build_jukebox_image_user_data(region, node_ix, appstor_num=1)
+    ovh_id = create_cloud_instance(
+        region=region,
+        flavor=JUKEBOX_NODE_FLAVOR,
+        name=name,
+        image=JUKEBOX_NODE_IMAGE_NAME,
+        private_ip=private_ip,
+        user_data=user_data,
+    )
     log.info(
-        "add_jukebox_node: created new jukebox node '%s' in region %s (OVH id: %s)",
+        "add_jukebox_node: initiated creation of a new jukebox node '%s' in region %s (OVH id: %s)",
         name,
         region.value,
         ovh_id,

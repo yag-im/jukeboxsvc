@@ -28,3 +28,5 @@ def init_app(app: FastAPI) -> None:  # noqa: ARG001  # pylint: disable=unused-ar
     logging.getLogger("invoke").setLevel(logging.INFO)
     logging.getLogger("paramiko").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.INFO)
+    logging.getLogger("stevedore").setLevel(logging.INFO)
+    logging.getLogger("keystoneauth").setLevel(logging.INFO)

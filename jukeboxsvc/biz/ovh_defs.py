@@ -99,6 +99,8 @@ DC_REGION_TO_OVH_CLOUD_REGION: dict[DcRegion, OvhCloudRegion] = {
     DcRegion.US_WEST_1: OvhCloudRegion.US_WEST_OR_1,
 }
 
+OVH_PRIVATE_NETWORK_NAME = "yag-pn"
+
 
 def normalize_region(raw_ovh_region: str) -> DcRegion:
     regions_map: dict[str, DcRegion] = {
@@ -163,17 +165,8 @@ class OvhClusterNodeDescr(BaseModel):
 
     @property
     def node_ix(self) -> int:
-        # TODO: drop private_ip parsing once all instance names are standartized (current appstor nodes are not)
-        if self.node_type == OvhNodeType.DEDICATED:
-            # Dedicated nodes have no private IP; extract index from name (e.g. "jukebox0-us-east-1" -> 0)
-            match = re.search(r"(\d+)", self.name)
-            if match is None:
-                raise ValueError(f"node '{self.name}' has no index in name; cannot determine node index")
-            return int(match.group(1))
-        if self.private_ip is None:
-            raise ValueError(f"node '{self.name}' has no private IP; cannot determine node index")
-        last_octet = int(self.private_ip.split(".")[-1])
-        if NodeServiceType.JUKEBOX.value in self.name:
-            return last_octet - 2
-        else:
-            return last_octet % 200
+        # Extract index from name (e.g. "jukebox23-us-west-1" -> 23, "appstor0-us-east-1" -> 0)
+        match = re.search(r"(\d+)", self.name)
+        if match is None:
+            raise ValueError(f"node '{self.name}' has no index in name; cannot determine node index")
+        return int(match.group(1))

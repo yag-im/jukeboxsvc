@@ -343,7 +343,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
             Mount(
                 type="volume",
                 target=jukebox_container_app_path,
-                source="appstor-vol",
+                source="appstor0-vol",  # TODO: use a correct volume based on the appstor index (mapped to user)
                 subpath=str(_get_clone_subpath(run_specs)),
                 read_only=False,
             )

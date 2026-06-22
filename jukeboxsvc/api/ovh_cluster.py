@@ -24,8 +24,19 @@ def ovh_cluster_nodes() -> list[OvhClusterNodeDescr]:
     "/ovh/cluster/nodes/create", response_model=CreateCloudInstanceResponseDTO, operation_id="create_ovh_cluster_node"
 )
 def ovh_cluster_node_create(req: CreateCloudInstanceRequestDTO) -> CreateCloudInstanceResponseDTO:
-    """Creates a new node in the OVH cluster."""
-    instance_id = create_cloud_instance(region=req.region, flavor=req.flavor, name=req.name, image=req.image)
+    """Creates a new cloud instance in the OVH cluster.
+    Only jukebox nodes can be created that way;
+    appstor node requirements are handled differently (e.g. block storage creation and volume attach), so use infra's
+    add_appstor.sh script.
+    """
+    instance_id = create_cloud_instance(
+        region=req.region,
+        flavor=req.flavor,
+        name=req.name,
+        image=req.image,
+        private_ip=None,
+        user_data=None,
+    )
     return CreateCloudInstanceResponseDTO(id=instance_id)
 
 

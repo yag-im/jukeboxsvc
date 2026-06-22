@@ -92,12 +92,12 @@ POST http://localhost/ovh/cluster/nodes/create
 content-type: application/json
 
 {
-    "flavor": "d2-2",
-    "image": "Debian 13",
-    "name": "jukebox-instance-xf45dwe",
+    "flavor": "l4-90",
+    "image": "debian13-jukebox-gpu-nvidia",
+    "name": "jukebox0-us-east-1-dev",
     "region": "us-east-1"
 }
 ###
 
-POST http://localhost/ovh/cluster/nodes/8b872c56-53f9-4a82-bc1d-c0b3fb02f3fb/delete
+POST http://localhost/ovh/cluster/nodes/d9b19dce-1dd0-47d7-97a2-c5a7749b3717/delete
 ###

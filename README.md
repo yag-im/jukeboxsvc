@@ -14,13 +14,13 @@ and contains `apps` and `clones` folders.
 
 jukeboxsvc will perform a local copy from `apps` to `clones` on the app run event.
 
-Also make sure `appstor-vol` docker volume (sourced from ~/yag/data/ports/clones) was created on the host machine:
+Also make sure `appstor0-vol` docker volume (sourced from ~/yag/data/ports/clones) was created on the host machine:
 
     docker volume create --driver local \
         --opt type=none \
         --opt o=bind \
         --opt device=~/yag/data/ports/clones \
-        appstor-vol
+        appstor0-vol
 
 This volume will be mounted inside the jukebox docker container on the app start.
 
