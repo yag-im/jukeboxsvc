@@ -26,10 +26,6 @@ COPY runtime/bin ${APP_HOME_DIR}/bin
 #     gunicorn.config.py: needed for OTEL post-fork tracing purposes
 COPY runtime/conf ${APP_HOME_DIR}/conf
 
-# TODO: drop after merge: https://github.com/docker/docker-py/pull/3270
-COPY patch_docker_services.diff /tmp
-RUN patch /usr/local/lib/python3.11/site-packages/docker/types/services.py /tmp/patch_docker_services.diff
-
 ENV APP_HOME_DIR=${APP_HOME_DIR}
 
 CMD $APP_HOME_DIR/bin/start.sh
