@@ -27,6 +27,7 @@ class AppPlatform(StrEnum):
     SEGA_GENESIS = "genesis-slash-megadrive"
     WINDOWS = "win"
     ZX_SPECTRUM = "zxs"
+    AMIGA = "amiga"
 
 
 class GpuModel(StrEnum):
