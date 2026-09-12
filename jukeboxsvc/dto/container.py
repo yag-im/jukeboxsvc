@@ -28,6 +28,7 @@ class AppPlatform(StrEnum):
     WINDOWS = "win"
     ZX_SPECTRUM = "zxs"
     AMIGA = "amiga"
+    TRS80 = "trs-80"
 
 
 class GpuModel(StrEnum):

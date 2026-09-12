@@ -33,6 +33,7 @@ from jukeboxsvc.dto.container import (
     GPU_MODELS_SORTED_BY_PERFORMANCE,
     GPU_VENDOR_BY_MODEL,
     VIDEO_ENC_BY_GPU_VENDOR,
+    AppPlatform,
     DcRegion,
     GpuModel,
     ResumeContainerRequestDTO,
@@ -53,6 +54,7 @@ RETROARCH_PHILIPS_CD_I_LOADING_DURATION = 12
 RETROARCH_ZXS_LOADING_DURATION = 0
 RETROARCH_GENESIS_SLASH_MEGA_DRIVE_LOADING_DURATION = 0
 RETROARCH_AMIGA_LOADING_DURATION = 0
+RETROARCH_TRS_80_LOADING_DURATION = 22
 
 log = logging.getLogger("jukeboxsvc")
 
@@ -207,14 +209,16 @@ def get_runner_loading_duration(run_specs: RunContainerRequestDTO) -> int:
         elif platform == "win":
             return DOSBOX_WIN_LOADING_DURATION
     elif runner_name == "retroarch":
-        if platform == "philips-cd-i":
+        if platform == AppPlatform.PHILIPS_CD_I:
             return RETROARCH_PHILIPS_CD_I_LOADING_DURATION
-        elif platform == "zxs":
+        elif platform == AppPlatform.ZX_SPECTRUM:
             return RETROARCH_ZXS_LOADING_DURATION
-        elif platform == "genesis-slash-megadrive":
+        elif platform == AppPlatform.SEGA_GENESIS:
             return RETROARCH_GENESIS_SLASH_MEGA_DRIVE_LOADING_DURATION
-        elif platform == "amiga":
+        elif platform == AppPlatform.AMIGA:
             return RETROARCH_AMIGA_LOADING_DURATION
+        elif platform == AppPlatform.TRS80:
+            return RETROARCH_TRS_80_LOADING_DURATION
     return int(os.getenv("JUKEBOX_CONTAINER_STREAMD_LOADING_DURATION", "5"))
 
 
