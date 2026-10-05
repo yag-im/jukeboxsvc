@@ -25,7 +25,7 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "ms-python.black-formatter",
+                "charliermarsh.ruff",
                 "humao.rest-client"
             ]
         }

@@ -3,13 +3,15 @@ import os
 import typing as t
 from datetime import datetime
 
-import docker
 from docker.errors import (
     APIError,
     NotFound,
 )
 from docker.models.containers import Container as DockerContainer
-from docker.types import Mount
+from docker.types import (
+    DeviceRequest,
+    Mount,
+)
 from pydantic import BaseModel
 from requests import JSONDecodeError
 
@@ -130,30 +132,34 @@ class Node:
         auto_remove: bool = True,
         detach: bool = True,
         devices: t.Optional[list[str]] = None,
-        device_requests: t.Optional[list[docker.types.DeviceRequest]] = None,
+        device_requests: t.Optional[list[DeviceRequest]] = None,
         mounts: t.Optional[list[Mount]] = None,
         network_mode: str = "host",  # cos webrtc requires a lot of UDP ports
         privileged: bool = False,
         cap_add: t.Optional[list[str]] = None,
     ) -> dict[str, t.Any]:
-        c = self._client.containers.run(
-            auto_remove=auto_remove,
-            cpuset_cpus=",".join(map(str, run_specs.attrs.cpuset_cpus)),
-            detach=detach,
-            devices=devices,
-            device_requests=device_requests,
-            environment=run_specs.env_vars.model_dump(),
-            image=run_specs.attrs.image_tag,
-            labels=run_specs.labels.model_dump(),
-            mem_limit=run_specs.attrs.memory_limit,
-            nano_cpus=run_specs.attrs.nanocpus_limit,
-            name=run_specs.attrs.name,
-            network_mode=network_mode,
-            privileged=privileged,
-            remove=auto_remove,  # TODO: double?
-            shm_size=run_specs.attrs.memory_shared,
-            mounts=mounts,
-            cap_add=cap_add,
+        # detach=True makes run() return a Container rather than logs bytes
+        c = t.cast(
+            DockerContainer,
+            self._client.containers.run(
+                auto_remove=auto_remove,
+                cpuset_cpus=",".join(map(str, run_specs.attrs.cpuset_cpus)),
+                detach=detach,
+                devices=devices,
+                device_requests=device_requests,
+                environment=run_specs.env_vars.model_dump(),
+                image=run_specs.attrs.image_tag,
+                labels=run_specs.labels.model_dump(),
+                mem_limit=run_specs.attrs.memory_limit,
+                nano_cpus=run_specs.attrs.nanocpus_limit,
+                name=run_specs.attrs.name,
+                network_mode=network_mode,
+                privileged=privileged,
+                remove=auto_remove,  # TODO: double?
+                shm_size=run_specs.attrs.memory_shared,
+                mounts=mounts,
+                cap_add=cap_add,
+            ),
         )
 
         return {
@@ -176,7 +182,7 @@ class Node:
         try:
             self._get_container(container_id).pause()
         except APIError as e:
-            if e.response.status_code == 409:  # conflict (already paused)
+            if e.status_code == 409:  # conflict (already paused)
                 log.warning(e.explanation)
             else:
                 raise e
@@ -210,9 +216,10 @@ class Node:
 
         self.containers = {}
         for c in client.containers.list():
-            if "jukebox_" in c.name:
+            if c.name and "jukebox_" in c.name:
                 try:
-                    self.containers[c.id] = Container(c, collect_stats=self._collect_stats)
+                    container = Container(c, collect_stats=self._collect_stats)
+                    self.containers[container.id] = container
                 except JSONDecodeError as e:
                     # this happens quite often due to a delayed sync between local and remote states
                     # (e.g. for non-existing container)

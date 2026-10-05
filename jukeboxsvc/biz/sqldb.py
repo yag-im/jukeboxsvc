@@ -6,6 +6,7 @@ from contextvars import ContextVar
 from sqlalchemy import create_engine
 from sqlalchemy.orm import (
     DeclarativeBase,
+    Query,
     scoped_session,
     sessionmaker,
 )
@@ -27,7 +28,7 @@ def _scopefunc() -> t.Hashable:
 
 
 class Base(DeclarativeBase):
-    pass
+    query: t.ClassVar[Query[t.Any]]
 
 
 class _Sqldb:

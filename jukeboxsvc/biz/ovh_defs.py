@@ -60,8 +60,8 @@ GPU_BY_CPU: dict[str, GpuModel] = {
 }
 
 GPUS_BY_FLAVOR: dict[OvhNodeFlavor, list[GpuModel]] = {
-    OvhNodeFlavor.CUSTOM_1: [GpuModel.NVIDIA_GTX_1060, GpuModel.INTEL_UHD_750],
-    # OvhNodeFlavor.CUSTOM_1: [GpuModel.INTEL_UHD_750, GpuModel.NVIDIA_GTX_1060],
+    # OvhNodeFlavor.CUSTOM_1: [GpuModel.NVIDIA_GTX_1060, GpuModel.INTEL_UHD_750],
+    OvhNodeFlavor.CUSTOM_1: [GpuModel.INTEL_UHD_750, GpuModel.NVIDIA_GTX_1060],
     OvhNodeFlavor.RISE_3: [GpuModel.INTEL_UHD_P630],
     OvhNodeFlavor.T2_LE_45: [GpuModel.NVIDIA_TESLA_V100S],
     OvhNodeFlavor.L4_90: [GpuModel.NVIDIA_L4],
@@ -154,7 +154,7 @@ class OvhClusterNodeDescr(BaseModel):
         return cls(
             id=info["iam"]["id"],
             name=info["iam"]["displayName"],
-            private_ip=None,  # dedicated nodes hide private IPs
+            private_ip=None,  # dedicated nodes are hiding private IPs
             public_ip=info["ip"],
             region=normalize_region(info["region"]),
             node_type=OvhNodeType.DEDICATED,

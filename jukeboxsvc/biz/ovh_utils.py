@@ -6,7 +6,7 @@ from jukeboxsvc.dto.container import DcRegion
 
 def node_ix_from_instance_name(name: str) -> int:
     """Extracts the node index from the instance name (e.g. 'jukebox34-us-west-1' -> 34)."""
-    first_token = name.split("-")[0]
+    first_token = name.split("-", maxsplit=1)[0]
     match = re.search(r"\d+", first_token)
     if not match:
         raise ValueError(f"Invalid instance name format: {name}")
@@ -31,7 +31,7 @@ def node_ix_to_private_ip(node_service: NodeServiceType, region: DcRegion, node_
 
 def private_ip_to_node_ix(node_service: NodeServiceType, private_ip: str) -> int:
     """Extracts the node index from a private IP address in the OVH private network."""
-    last_octet = int(private_ip.split(".")[-1])
+    last_octet = int(private_ip.rsplit(".", maxsplit=1)[-1])
     if node_service == NodeServiceType.JUKEBOX:
         return last_octet - 2
     elif node_service == NodeServiceType.APPSTOR:

@@ -19,4 +19,4 @@ def get_sessions(node_id: str | None = None) -> GetSessionsResponseDTO:
     )
     if res.status_code != 200:
         raise BizException(message=res.text)
-    return GetSessionsResponseDTO.Schema().load(data=res.json())
+    return GetSessionsResponseDTO.model_validate(res.json())

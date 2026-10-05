@@ -2,11 +2,12 @@
 
 import datetime
 import typing as t
-from dataclasses import field
 from enum import StrEnum
 
-from marshmallow import Schema
-from marshmallow_dataclass import dataclass
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 
 class SessionStatus(StrEnum):
@@ -16,26 +17,21 @@ class SessionStatus(StrEnum):
     CLOSED = "closed"
 
 
-@dataclass
-class SessionDC:
-    @dataclass
-    class WsConn:
+class SessionDC(BaseModel):
+    class WsConn(BaseModel):
         """Websocket connection parameters."""
 
         id: str  # unique ws connection id (used as a sticky session cookie value)
         consumer_id: str  # peer_id of the party awaiting for a stream (UA)
         producer_id: t.Optional[str] = None  # peer_id of the party producing a stream (streamd)
-        Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
-    @dataclass
-    class Container:
+    class Container(BaseModel):
         """Docker container parameters."""
 
         id: str
         node_id: str
         region: str
         cpuset_cpus: list[int]
-        Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
     app_release_uuid: str
     container: t.Optional[Container]
@@ -43,57 +39,42 @@ class SessionDC:
     user_id: int
     ws_conn: WsConn
     id: str = ""
-    status: t.Optional[SessionStatus] = field(default=None, metadata={"by_value": True})
+    status: t.Optional[SessionStatus] = None
 
 
-@dataclass
-class CreateSessionRequestDTO:
-    @dataclass
-    class WsConn:
+class CreateSessionRequestDTO(BaseModel):
+    class WsConn(BaseModel):
         """Websocket connection parameters."""
 
         id: str  # unique ws connection id (used as a sticky session cookie value)
         consumer_id: str  # peer_id of the party awaiting for a stream (UA)
-        Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
     app_release_uuid: str
     user_id: int
     ws_conn: WsConn
-    preferred_dcs: t.Optional[list[str]] = field(default_factory=list)
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
+    preferred_dcs: t.Optional[list[str]] = Field(default_factory=list)
 
 
-@dataclass
-class CreateSessionResponseDTO:
+class CreateSessionResponseDTO(BaseModel):
     session_id: str
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
 
-@dataclass
-class StartSessionRequestDTO:
-    @dataclass
-    class WsConn:
+class StartSessionRequestDTO(BaseModel):
+    class WsConn(BaseModel):
         id: str  # must be present for `resume` case
         consumer_id: str  # must be present for `resume` case
         producer_id: str
 
     ws_conn: WsConn
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
 
-@dataclass
-class GetSessionResponseDTO:
+class GetSessionResponseDTO(BaseModel):
     session: SessionDC
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
 
-@dataclass
-class GetSessionsResponseDTO:
+class GetSessionsResponseDTO(BaseModel):
     sessions: list[SessionDC]
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name
 
 
-@dataclass
-class SubmitWebRtcStatsRequestDTO:
+class SubmitWebRtcStatsRequestDTO(BaseModel):
     stats: str  # json-encoded stats structure
-    Schema: t.ClassVar[t.Type[Schema]] = Schema  # pylint: disable=invalid-name

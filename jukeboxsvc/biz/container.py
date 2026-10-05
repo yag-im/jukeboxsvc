@@ -27,7 +27,6 @@ class ContainerRunSpecs(BaseModel):
         LOADING_DURATION: int | None = None
         MAX_INACTIVITY_DURATION: int | None = None
         RUN_MIDI_SYNTH: str | None = None
-        SIGNALER_AUTH_TOKEN: str | None = None
         SIGNALER_HOST: str | None = None
         SIGNALER_URI: str | None = None
         SCREEN_HEIGHT: int | None = None
@@ -70,11 +69,13 @@ class Container:
     specs: ContainerRunSpecs
 
     def __init__(self, c: DockerContainer, collect_stats: bool = False) -> None:
+        if c.id is None or c.name is None or c.image is None:
+            raise ValueError(f"incomplete docker container data: {c!r}")
         self.id = c.id
         self.status = c.status
         self.created = dateparser.parse(c.attrs["Created"])
         if collect_stats and self.status == "running":
-            stats = c.stats(stream=False)
+            stats = t.cast(dict[str, t.Any], c.stats(stream=False))
             self.stats = ContainerStats(
                 cpu_throttling_data=stats["cpu_stats"]["throttling_data"],
                 cpu_usage_perc=self._calc_cpu_usage(stats),

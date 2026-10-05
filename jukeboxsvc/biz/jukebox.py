@@ -8,8 +8,10 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-import docker
-from docker.types import Mount
+from docker.types import (
+    DeviceRequest,
+    Mount,
+)
 from fabric import Connection
 from invoke.exceptions import UnexpectedExit
 
@@ -234,7 +236,6 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         ContainerRunFailedException: when container run failed
     """
     fps = int(os.environ["FPS"])
-    signaler_auth_token = os.environ["SIGNALER_AUTH_TOKEN"]
     signaler_host = os.environ["SIGNALER_HOST"]
     signaler_uri = os.environ["SIGNALER_URI"]
     stun_uri = os.environ["STUN_URI"]
@@ -283,7 +284,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         devices.append(f"/dev/dri/card{gpu_card_id}:/dev/dri/card{gpu_card_id}:rwm")
         devices.append(f"/dev/dri/renderD{gpu_render_device_id}:/dev/dri/renderD{gpu_render_device_id}:rwm")
     elif video_enc == VideoEnc.GPU_NVIDIA:
-        device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+        device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
     if run_specs.reqs.container.runner.name == "qemu":
         devices.append("/dev/kvm:/dev/kvm")
@@ -293,7 +294,7 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         # TODO: can't use a simpler formula (e.g. 10+len(node.containers)) cos it may end up with duplicate displays
         # as our local state is not in sync with a real cluster state
         # :10, :11 etc, they shouldn't intersect!
-        env_display = f":{random.randint(100, 50000)}"  # nosec B311
+        env_display = f":{random.randint(100, 50000)}"  # noqa: S311
         env_show_pointer = _show_pointer(run_specs.reqs.container.runner.name)
     else:
         env_display = None
@@ -314,7 +315,6 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
         "RUN_MIDI_SYNTH": "true" if run_specs.reqs.app.midi else "false",
         "SCREEN_HEIGHT": run_specs.reqs.app.screen_height,
         "SCREEN_WIDTH": run_specs.reqs.app.screen_width,
-        "SIGNALER_AUTH_TOKEN": signaler_auth_token,
         "SIGNALER_HOST": signaler_host,
         "SIGNALER_URI": signaler_uri,
         "STUN_URI": stun_uri,
@@ -352,7 +352,8 @@ def run_container(run_specs: RunContainerRequestDTO) -> RunContainerResponseDTO:
                 type="volume",
                 target=jukebox_container_app_path,
                 source="appstor0-vol",  # TODO: use a correct volume based on the appstor index (mapped to user)
-                subpath=str(_get_clone_subpath(run_specs)),
+                # typeshed's Mount stub lacks subpath (added in docker 7.1)
+                subpath=str(_get_clone_subpath(run_specs)),  # pyright: ignore[reportCallIssue]
                 read_only=False,
             )
         ],

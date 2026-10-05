@@ -1,80 +1,95 @@
 [build-system]
-build-backend = "poetry_dynamic_versioning.backend"
-requires = ["poetry-core", "poetry-dynamic-versioning"]
+build-backend = "hatchling.build"
+requires = ["hatchling", "uv-dynamic-versioning"]
 
-[tool.poetry]
-authors = ["acme-im"]
+[project]
+authors = [{ name = "acme-im" }]
 description = "jukebox cluster management service"
 keywords = ["signaling"]
 name = "jukeboxsvc"
 readme = "README.md"
-version = "0.0.0"
-packages = [{ include = "jukeboxsvc" }]
+dynamic = ["version"]
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.34.21,<2",
+    "dateparser>=1.2.0,<2",
+    "docker>=7.2.0,<8",
+    "gunicorn>=23.0.0,<24",
+    "fabric>=3.2.2,<4",
+    "fastapi>=0.115.0,<0.116",
+    "uvicorn[standard]>=0.30.0,<0.31",
+    "sqlalchemy>=2.0.0,<3",
+    "psycopg[binary]>=3.2,<4",
+    "ovh>=1.2.0,<2",
+    "openstacksdk>=4.0,<5",
+    "pydantic>=2.0,<3",
+    "opentelemetry-distro",
+    "opentelemetry-exporter-otlp",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-boto3 = "^1.34.21"
-dateparser = "^1.2.0"
-docker = "^7.2.0"
-gunicorn = "^23.0.0"
-fabric = "^3.2.2"
-fastapi = "^0.115.0"
-uvicorn = {version = "^0.30.0", extras = ["standard"]}
-sqlalchemy = "^2.0.0"
-psycopg2 = "^2.9.9"
-ovh = "^1.2.0"
-openstacksdk = "^4.0"
-marshmallow = "^3.20.2"
-marshmallow-dataclass = "^8.6.0"
-opentelemetry-distro = "*"
-opentelemetry-exporter-otlp = "*"
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pyright",
+    "ruff",
+    "types-dateparser",
+    "types-requests",
+]
+test = [
+    "pytest",
+    "pytest-dotenv",
+]
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "*"
-tox = "*"
-# move mypys' types-* modules deps into .pre-commit-config.yaml
+[tool.uv]
+default-groups = ["dev", "test"]
 
-[tool.poetry.group.test.dependencies]
-pytest = "*"
-pytest-dotenv = "*"
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.poetry-dynamic-versioning]
-enable = true
+[tool.hatch.build.targets.wheel]
+packages = ["jukeboxsvc"]
+
+[tool.uv-dynamic-versioning]
 vcs = "git"
 style = "semver"
 
-[tool.bandit.assert_used]
-exclude = ["*_test.py", "test_*.py"]
-
-[tool.black]
+[tool.ruff]
 line-length = 120
-exclude = '''
-(
-  \.git
-  | \.tox
-  | \.venv
-  | venv
-  | build
-  | dist
-)
-'''
+target-version = "py314"
+extend-exclude = ["**/gen/*", "target"]
 
-[tool.isort]
-include_trailing_comma = true
-force_grid_wrap = 2
-use_parentheses = true
-line_length = 120
-profile = "black"
-multi_line_output = 3
-skip = "target"
-skip_glob = "**/gen/*,.venv*/*,venv*/*,.tox/*"
-known_first_party = "jukeboxsvc"
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "ANN", # flake8-annotations (replaces mypy disallow_untyped_defs)
+    "S",   # bandit
+    "PL",  # pylint
+]
+ignore = [
+    "E501",   # line length is handled by the formatter
+    "ANN401", # allow typing.Any
+    "N818",   # exception names without Error suffix
+    "PLR",    # pylint refactor checks were disabled
+    "PLW0603", # global-statement was disabled
+]
 
-[tool.mypy]
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-ignore_missing_imports = true
-plugins = "marshmallow_dataclass.mypy"
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN", "PLC0415"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["jukeboxsvc"]
+
+[tool.pyright]
+include = ["jukeboxsvc"]
+exclude = ["tests", "**/__pycache__", ".venv"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 addopts = "-s -v"
@@ -87,30 +102,3 @@ markers = [
     "unit: marks unittests"
 ]
 testpaths = "tests"
-
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-isolated_build = True
-skipsdist = True
-skip_missing_interpreters = True
-
-[testenv:lint]
-skip_install = false
-recreate = false
-ignore_errors = false
-deps =
-    pre-commit
-commands =
-    pre-commit run --all-files
-
-[testenv:test]
-recreate = false
-ignore_errors = true
-deps =
-    poetry
-commands_pre =
-    poetry install --with test
-commands =
-    poetry run pytest tests/
-"""

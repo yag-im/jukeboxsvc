@@ -26,7 +26,6 @@ This volume will be mounted inside the jukebox docker container on the app start
 
 Create *.devcontainer/secrets.env* file:
 
-    SIGNALER_AUTH_TOKEN=***VALUE***
     SQLDB_PASSWORD=***VALUE***
 
 Make sure:

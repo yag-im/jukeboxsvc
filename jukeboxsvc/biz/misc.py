@@ -13,9 +13,8 @@ DOCKER_CLIENT_TIMEOUT = 10
 log = logging.getLogger("jukeboxsvc")
 
 
-@t.no_type_check
-def log_input_output(func):
-    def wrap(*args, **kwargs):
+def log_input_output[**P, R](func: t.Callable[P, R]) -> t.Callable[P, R]:
+    def wrap(*args: P.args, **kwargs: P.kwargs) -> R:
         # Log the function name and arguments
         log.debug("calling %s with args: %s, kwargs: %s", func.__name__, args, kwargs)
 

@@ -16,9 +16,8 @@ env.bak/
 venv.bak/
 
 .idea
-.mypy_cache
+.ruff_cache
 .pytest_cache
-.tox
 .vscode
 dist
 

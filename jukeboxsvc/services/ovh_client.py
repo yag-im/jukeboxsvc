@@ -3,7 +3,10 @@ import functools
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import (
+    Any,
+    cast,
+)
 
 import openstack
 import openstack.connection
@@ -111,10 +114,10 @@ def _node_from_os_server(server: Any, region: OvhCloudRegion) -> OvhClusterNodeD
 
 def get_dedicated_nodes() -> list[OvhClusterNodeDescr]:
     client = _get_ovh_client()
-    server_names: list[str] = client.get("/dedicated/server")
+    server_names = cast(list[str], client.get("/dedicated/server"))
     nodes: list[OvhClusterNodeDescr] = []
     for name in server_names:
-        info: dict[str, Any] = client.get(f"/dedicated/server/{name}")
+        info = cast(dict[str, Any], client.get(f"/dedicated/server/{name}"))
         if info["iam"]["state"] == "OK":
             nodes.append(OvhClusterNodeDescr.from_dedicated_instance(info))
     return nodes
