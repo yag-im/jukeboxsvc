@@ -42,6 +42,8 @@ def _get_ovh_nodes_by_service(service: NodeServiceType) -> list[OvhClusterNodeDe
 
 def sync_cluster_state() -> None:
     """Syncs cluster state with OVH API: updates SQL table cluster.nodes with the current active nodes"""
+    app_env = os.environ.get("APP_ENV")
+    env_suffix = f"-{app_env}"
     for service_type in (NodeServiceType.JUKEBOX, NodeServiceType.APPSTOR):
         # dedicated servers are global for all envs,
         # so need to check a server name suffix to match the current environment
@@ -49,7 +51,7 @@ def sync_cluster_state() -> None:
             n
             for n in _get_ovh_nodes_by_service(service_type)
             if n.status == OvhNodeStatus.ACTIVE
-            and (n.node_type != OvhNodeType.DEDICATED or n.name.endswith(f"-{os.environ.get('APP_ENV')}"))
+            and (n.node_type != OvhNodeType.DEDICATED or n.name.endswith(env_suffix))
         ]
         known_nodes: list[NodeDAO] = NodeDAO.query.filter(
             NodeDAO.service_type == service_type.value,

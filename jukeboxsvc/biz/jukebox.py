@@ -25,6 +25,7 @@ from jukeboxsvc.biz.errors import (
 )
 from jukeboxsvc.biz.misc import log_input_output
 from jukeboxsvc.biz.node import Node
+from jukeboxsvc.biz.sqldb import sqldb
 from jukeboxsvc.dto.cluster import (
     ClusterUsageResponseDTO,
     PullContainerImageRequestDTO,
@@ -382,7 +383,9 @@ def cluster_status() -> ClusterUsageResponseDTO:
 @log_input_output
 async def pull_image(image: PullContainerImageRequestDTO) -> None:
     """Pull specified image onto every available node in the cluster."""
-    avail_nodes = get_jukebox_nodes()
+    # runs as a background task that outlives the originating request, so it needs its own session
+    with sqldb.session_scope():
+        avail_nodes = get_jukebox_nodes()
     try:
         images = await asyncio.gather(
             *[asyncio.to_thread(n.pull_image, image.repository, image.tag) for n in avail_nodes]

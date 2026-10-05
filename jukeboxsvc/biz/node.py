@@ -102,10 +102,12 @@ class Node:
 
     def __repr__(self) -> str:
         container_ids = list(self.containers.keys()) if hasattr(self, "containers") else []
+        docker_api_uri = getattr(self, "docker_api_uri", None)
+        hw_specs = getattr(self, "hw_specs", None)
         return (
-            f"Node(docker_api_uri={getattr(self, 'docker_api_uri', None)}, region={self.region}, "
+            f"Node(docker_api_uri={docker_api_uri}, region={self.region}, "
             f"containers={len(container_ids)}, container_ids={container_ids}, "
-            f"hw_specs={getattr(self, 'hw_specs', None)})"
+            f"hw_specs={hw_specs})"
         )
 
     def _get_container(self, container_id: str) -> DockerContainer:

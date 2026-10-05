@@ -10,7 +10,10 @@ from jukeboxsvc.biz import (
     errors,
     log,
 )
-from jukeboxsvc.biz.sqldb import sqldb
+from jukeboxsvc.biz.sqldb import (
+    SqldbSessionMiddleware,
+    sqldb,
+)
 
 
 def _build_db_url() -> str:
@@ -32,6 +35,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="jukeboxsvc", lifespan=_lifespan)
     log.init_app(app)
     errors.init_app(app)
+    app.add_middleware(SqldbSessionMiddleware)
     app.include_router(router)
     logging.getLogger("jukeboxsvc").info("app init completed")
     return app
