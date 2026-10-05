@@ -18,7 +18,7 @@ from jukeboxsvc.biz.sqldb import (
 
 def _build_db_url() -> str:
     return (
-        f'postgresql://{os.environ["SQLDB_USERNAME"]}:{os.environ["SQLDB_PASSWORD"]}'
+        f'postgresql+psycopg2://{os.environ["SQLDB_USERNAME"]}:{os.environ["SQLDB_PASSWORD"]}'
         f'@{os.environ["SQLDB_HOST"]}:{os.environ["SQLDB_PORT"]}/{os.environ["SQLDB_DBNAME"]}'
     )
 
