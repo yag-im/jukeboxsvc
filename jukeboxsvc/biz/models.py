@@ -22,6 +22,7 @@ _node_type_enum = ENUM("dedicated", "public-cloud-instance", name="node_type", s
 _node_flavor_enum = ENUM(
     "custom-1",
     "rise-3",
+    "sys-3",
     "b2-7",
     "b3-8",
     "d2-2",

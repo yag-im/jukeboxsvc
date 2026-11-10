@@ -25,6 +25,7 @@ class OvhNodeFlavor(StrEnum):
     # dedicated (uppercase)
     CUSTOM_1 = "CUSTOM-1"  # desktop simulator, 1x Intel UHD 750, 1x NVIDIA GTX 1060
     RISE_3 = "RISE-3"
+    SYS_3 = "SYS-3"  # Intel Xeon-E 2288G
     # public cloud instance (lowercase)
     B2_7 = "b2-7"
     B3_8 = "b3-8"
@@ -63,6 +64,7 @@ GPUS_BY_FLAVOR: dict[OvhNodeFlavor, list[GpuModel]] = {
     # OvhNodeFlavor.CUSTOM_1: [GpuModel.NVIDIA_GTX_1060, GpuModel.INTEL_UHD_750],
     OvhNodeFlavor.CUSTOM_1: [GpuModel.INTEL_UHD_750, GpuModel.NVIDIA_GTX_1060],
     OvhNodeFlavor.RISE_3: [GpuModel.INTEL_UHD_P630],
+    OvhNodeFlavor.SYS_3: [GpuModel.INTEL_UHD_P630],
     OvhNodeFlavor.T2_LE_45: [GpuModel.NVIDIA_TESLA_V100S],
     OvhNodeFlavor.L4_90: [GpuModel.NVIDIA_L4],
     OvhNodeFlavor.L4_180: [GpuModel.NVIDIA_L4, GpuModel.NVIDIA_L4],
@@ -71,6 +73,7 @@ GPUS_BY_FLAVOR: dict[OvhNodeFlavor, list[GpuModel]] = {
 CPUS_BY_FLAVOR: dict[OvhNodeFlavor, int] = {
     OvhNodeFlavor.CUSTOM_1: 8,
     OvhNodeFlavor.RISE_3: 8,
+    OvhNodeFlavor.SYS_3: 8,
     OvhNodeFlavor.B2_7: 2,
     OvhNodeFlavor.B3_8: 2,
     OvhNodeFlavor.D2_2: 1,
@@ -84,6 +87,7 @@ CPUS_BY_FLAVOR: dict[OvhNodeFlavor, int] = {
 MEMORY_BY_FLAVOR: dict[OvhNodeFlavor, int] = {
     OvhNodeFlavor.CUSTOM_1: 64 * 1024**3,
     OvhNodeFlavor.RISE_3: 32 * 1024**3,
+    OvhNodeFlavor.SYS_3: 32 * 1024**3,
     OvhNodeFlavor.B2_7: 7 * 1024**3,
     OvhNodeFlavor.B3_8: 8 * 1024**3,
     OvhNodeFlavor.D2_2: 2 * 1024**3,
@@ -158,7 +162,8 @@ class OvhClusterNodeDescr(BaseModel):
             public_ip=info["ip"],
             region=normalize_region(info["region"]),
             node_type=OvhNodeType.DEDICATED,
-            flavor=OvhNodeFlavor(info["commercialRange"]),
+            # commercialRange may include a CPU suffix, e.g. "SYS-3 | Intel Xeon-E 2288G"
+            flavor=OvhNodeFlavor(info["commercialRange"].split("|")[0].strip()),
             status=OvhNodeStatus.ACTIVE,  # no "status" field for dedicated nodes; OK state implies "active"
             created_ts=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),  # dedicated nodes have no creation time
         )
