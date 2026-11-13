@@ -1,3 +1,5 @@
+import json
+import os
 import threading
 import typing as t
 from contextlib import contextmanager
@@ -38,7 +40,14 @@ class _Sqldb:
 
     def init_app(self, database_url: str) -> None:
         # pool_pre_ping transparently replaces connections dropped by the server/network
-        engine = create_engine(database_url, pool_pre_ping=True)
+        engine_options: dict[str, t.Any] = {"pool_pre_ping": True}
+        raw_options = os.environ.get("SQLDB_ENGINE_OPTIONS")
+        if raw_options:
+            extra_options = json.loads(raw_options)
+            if not isinstance(extra_options, dict):
+                raise ValueError("SQLDB_ENGINE_OPTIONS must be a JSON object")
+            engine_options.update(extra_options)
+        engine = create_engine(database_url, **engine_options)
         factory = sessionmaker(bind=engine)
         self.session = scoped_session(factory, scopefunc=_scopefunc)
         Base.query = self.session.query_property()  # type: ignore[attr-defined]
